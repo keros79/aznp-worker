@@ -10,4 +10,5 @@ interface Env {
 	X402_PRICE_USDC: "0.00166";
 	X402_NETWORK: "solana";
 	DB: D1Database;
+	BROWSER: Fetcher;
 }

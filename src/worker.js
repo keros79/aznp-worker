@@ -254,7 +254,34 @@ export default {
         }
       }
 
-      // ── Tier 2: 자체 변환 ──────────────────────────────────────────────────
+      // ── Tier 3: Browser Rendering (Pro 전용) ─────────────────────────────
+      if (forceRender && limits.allowRender) {
+        if (env.BROWSER) {
+          try {
+            const puppeteer = await import('@cloudflare/puppeteer');
+            const browser = await puppeteer.launch(env.BROWSER);
+            const page = await browser.newPage();
+            await page.setViewport({ width: 1280, height: 800 });
+            await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 15000 });
+
+            const renderedHtml = await page.content();
+            await browser.close();
+
+            if (renderedHtml && renderedHtml.length > 100) {
+              markdown = convertToCleanMarkdown(renderedHtml, targetUrl, {
+                advanced: limits.advancedExtraction,
+                includeImages,
+              });
+              originalHtml = renderedHtml;
+              source = 'browser-rendering';
+            }
+          } catch (bErr) {
+            console.warn('[AZNP] Tier 3 Browser Rendering failed/fallback:', bErr.message);
+          }
+        }
+      }
+
+      // ── Tier 2: 자체 변환 (Tier 1 또는 Tier 3 미적용 시) ───────────────────
       if (!markdown) {
         let html = originalHtml;
 
@@ -295,11 +322,8 @@ export default {
           includeImages,
         });
         originalHtml = originalHtml || html;
-        source = 'aznp-self';
+        source = forceRender ? 'aznp-self-render-fallback' : 'aznp-self';
       }
-
-      // ── Tier 3: Browser Rendering (Pro 전용, 이 파일에선 미구현) ────────────
-      // Free plan에선 Tier 3 없음
 
       // ─── 9. 후처리 ───────────────────────────────────────────────────────────
       // Summary (Pro)

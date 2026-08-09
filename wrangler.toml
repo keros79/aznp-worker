@@ -29,9 +29,9 @@ binding = "DB"
 database_name = "aznp-analytics"
 database_id = "5ad6d12d-4121-4120-a4b4-bba3f5db93e3"
 
-# ─── (옵션) Browser Rendering 바인딩 (Pro Tier 3) ────────────────────────────
-# [[browser]]
-# binding = "BROWSER"
+# ─── Browser Rendering 바인딩 (Pro Tier 3) ────────────────────────────
+[browser]
+binding = "BROWSER"
 
 # ─── 개발 환경 ────────────────────────────────────────────────────────────────
 [dev]
