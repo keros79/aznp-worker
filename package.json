@@ -14,6 +14,10 @@
     "kv:put:prokey": "wrangler kv key put --namespace-id=<RESULTS_KV_ID>",
     "test": "echo 'No automated tests yet. Use curl for manual testing.'"
   },
+  "dependencies": {
+    "bs58": "^6.0.0",
+    "tweetnacl": "^1.0.3"
+  },
   "devDependencies": {
     "wrangler": "^3.0.0"
   },

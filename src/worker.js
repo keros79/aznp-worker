@@ -13,6 +13,8 @@
 
 import { convertToCleanMarkdown, estimateTokens, estimateOriginalTokens } from './htmlToMarkdown.js';
 import { checkRateLimit } from './rateLimit.js';
+import nacl from 'tweetnacl';
+import bs58 from 'bs58';
 
 // ─── 플랜 설정 ────────────────────────────────────────────────────────────────
 
@@ -44,10 +46,10 @@ const UPGRADE_URL = 'https://aznp.pages.dev/pricing';
 // ─── CORS 허용 오리진 ─────────────────────────────────────────────────────────
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'X-API-Key, Content-Type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'X-API-Key, Content-Type, x-wallet-address, x-signature, x-timestamp, PAYMENT-SIGNATURE, X-PAYMENT',
   'Access-Control-Expose-Headers':
-    'X-AZNP-Plan, X-AZNP-Source, X-AZNP-Cache, X-Token-Reduction, X-Markdown-Tokens, X-Original-Tokens, X-RateLimit-Remaining, X-RateLimit-Reset',
+    'X-AZNP-Plan, X-AZNP-Source, X-AZNP-Cache, X-Token-Reduction, X-Markdown-Tokens, X-Original-Tokens, X-RateLimit-Remaining, X-RateLimit-Reset, PAYMENT-REQUIRED',
 };
 
 // ─── Worker 메인 핸들러 ───────────────────────────────────────────────────────
@@ -59,22 +61,27 @@ export default {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
+    const url = new URL(request.url);
+
+    // [Route 1] Solana USDC 입금 충전 엔드포인트 (POST /v1/topup)
+    if (url.pathname === '/v1/topup' && request.method === 'POST') {
+      return handleTopup(request, env);
+    }
+
     // GET 이외 메서드 차단
     if (request.method !== 'GET') {
       return jsonResponse({ error: 'Method not allowed. Use GET.' }, 405);
     }
 
-    const url = new URL(request.url);
-
     // 헬스체크 엔드포인트
     if (url.pathname === '/health') {
-      return jsonResponse({ status: 'ok', version: '2.1', plan: 'free' }, 200);
+      return jsonResponse({ status: 'ok', version: '2.1', auth: 'solana-wallet-stateless' }, 200);
     }
 
     // 루트 경로: 간단한 안내
     if (url.pathname !== '/' && url.pathname !== '') {
       return jsonResponse(
-        { error: 'Not found. Use GET /?url=<target_url>', docs: UPGRADE_URL },
+        { error: 'Not found. Use GET /?url=<target_url> or POST /v1/topup', docs: UPGRADE_URL },
         404
       );
     }
@@ -120,30 +127,10 @@ export default {
     const planInfo = await getPlan(request, env);
     const limits = planInfo.limits;
 
-    // ─── 3. 기능 권한 조기 차단 (CPU 절약) ────────────────────────────────────
-    if (forceRender && !limits.allowRender) {
-      return jsonResponse(
-        { error: 'JS Rendering (render=true) is a Pro feature', upgrade: UPGRADE_URL },
-        403
-      );
-    }
-    if (mode === 'summary' && !limits.allowSummary) {
-      return jsonResponse(
-        { error: 'Summary mode is a Pro feature', upgrade: UPGRADE_URL },
-        403
-      );
-    }
-    if (format === 'json' && !limits.allowStructured) {
-      return jsonResponse(
-        { error: 'Structured JSON output is a Pro feature', upgrade: UPGRADE_URL },
-        403
-      );
-    }
-    if (maxTokens > 0 && !limits.allowSummary) {
-      return jsonResponse(
-        { error: 'max_tokens parameter is a Pro feature', upgrade: UPGRADE_URL },
-        403
-      );
+    // ─── 3. 기능 권한 및 x402 결제 체크 ────────────────────────────────────
+    const requiresPro = forceRender || mode === 'summary' || format === 'json' || maxTokens > 0;
+    if (requiresPro && planInfo.plan === 'free') {
+      return x402PaymentRequiredResponse(env, 'This feature requires payment via x402 or a Pro API Key.');
     }
 
     // ─── 4. Rate Limit 체크 ────────────────────────────────────────────────────
@@ -388,36 +375,236 @@ export default {
 // 유틸리티 함수
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 유틸리티 및 무키 결제 핸들러
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * 플랜 확인 (KV에서 API Key 조회)
+ * [Route 1] 온체인 Solana USDC 충전 핸들러 (POST /v1/topup)
+ */
+async function handleTopup(request, env) {
+  try {
+    const { wallet, tx_hash } = await request.json();
+
+    if (!wallet || !tx_hash) {
+      return jsonResponse({ error: 'wallet and tx_hash parameters are required' }, 400);
+    }
+
+    const kvStore = env.RESULTS_KV || env.API_KEYS;
+    if (!kvStore) {
+      return jsonResponse({ error: 'KV binding (RESULTS_KV) is not configured' }, 500);
+    }
+
+    // ① 트랜잭션 중복 처리 검증
+    const txProcessed = await kvStore.get(`tx:${tx_hash}`);
+    if (txProcessed) {
+      return jsonResponse({ error: 'Transaction already processed' }, 400);
+    }
+
+    // ② Solana RPC 온체인 트랜잭션 파싱
+    const rpcUrl = env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+    const rpcRes = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getTransaction',
+        params: [
+          tx_hash,
+          { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 }
+        ]
+      })
+    });
+
+    const rpcData = await rpcRes.json();
+    const tx = rpcData?.result;
+
+    if (!tx || tx.meta?.err) {
+      return jsonResponse({ error: 'Invalid or failed transaction hash on Solana blockchain' }, 400);
+    }
+
+    // ③ USDC 전송량 검증 (수신 지갑 잔액 증가분)
+    const serviceWallet = env.SERVICE_WALLET_ADDRESS || 'GuUdPHj3dnafbFvF2gMscCVAMCd4NvSE5ktsrbdAvT4E';
+    const usdcMint = env.USDC_MINT_ADDRESS || 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+
+    const postBalances = tx.meta?.postTokenBalances || [];
+    const preBalances = tx.meta?.preTokenBalances || [];
+
+    const postTarget = postBalances.find(b => b.owner === serviceWallet && b.mint === usdcMint);
+    const preTarget = preBalances.find(b => b.owner === serviceWallet && b.mint === usdcMint);
+
+    const postAmount = postTarget?.uiTokenAmount?.uiAmount || 0;
+    const preAmount = preTarget?.uiTokenAmount?.uiAmount || 0;
+    const amountUSDC = postAmount - preAmount;
+
+    // ④ 최소 $20 USDC 입금 검증
+    if (amountUSDC < 20) {
+      return jsonResponse({
+        error: 'Minimum deposit requirement is $20 USDC',
+        received_usdc: amountUSDC,
+        min_required: 20,
+        tiers: {
+          'Pro Agent': '$20 USDC = 12,000 requests',
+          'Enterprise': '$100 USDC = 80,000 requests'
+        }
+      }, 400);
+    }
+
+    // ⑤ 크레딧 계산 ($100 이상 시 800회/$, $20~$99.99 시 600회/$)
+    let addedCredits = 0;
+    if (amountUSDC >= 100) {
+      addedCredits = Math.floor(amountUSDC * 800); // Enterprise Tier
+    } else {
+      addedCredits = Math.floor(amountUSDC * 600); // Pro Agent Tier
+    }
+
+    // ⑥ KV 중복 마킹 (30일 TTL) 및 허용 크레딧 누적
+    await kvStore.put(`tx:${tx_hash}`, 'processed', { expirationTtl: 2592000 });
+
+    const currentAllowed = parseInt((await kvStore.get(`acc:${wallet}:allowed`)) || '0', 10);
+    const newAllowed = currentAllowed + addedCredits;
+    await kvStore.put(`acc:${wallet}:allowed`, newAllowed.toString());
+
+    return jsonResponse({
+      success: true,
+      wallet,
+      deposited_usdc: amountUSDC,
+      added_credits: addedCredits,
+      total_allowed_requests: newAllowed
+    }, 200);
+
+  } catch (err) {
+    return jsonResponse({ error: `Topup error: ${err.message}` }, 500);
+  }
+}
+
+/**
+ * 플랜 확인 (Solana Wallet Stateless Auth 우선 -> Pro API Key 차선)
  */
 async function getPlan(request, env) {
+  const kvStore = env.RESULTS_KV || env.API_KEYS;
+
+  // ─── 1. Solana Wallet Ed25519 무키 서명 인증 ───
+  const wallet = request.headers.get('x-wallet-address');
+  const signature = request.headers.get('x-signature');
+  const timestamp = request.headers.get('x-timestamp');
+
+  if (wallet && signature && timestamp) {
+    const now = Math.floor(Date.now() / 1000);
+    const reqTime = parseInt(timestamp, 10);
+
+    // 타임스탬프 5분 이내 검증 (리플레이 방지)
+    if (isNaN(reqTime) || Math.abs(now - reqTime) > 300) {
+      return { plan: 'invalid_timestamp', limits: FREE_LIMITS };
+    }
+
+    // Ed25519 서명 검증 ("x402:{timestamp}")
+    const message = `x402:${timestamp}`;
+    const isValidSig = verifySolanaSignature(message, signature, wallet);
+
+    if (isValidSig && kvStore) {
+      const allowed = parseInt((await kvStore.get(`acc:${wallet}:allowed`)) || '0', 10);
+      const used = parseInt((await kvStore.get(`acc:${wallet}:used`)) || '0', 10);
+
+      if (used >= allowed) {
+        return { plan: 'solana_insufficient', limits: FREE_LIMITS, wallet, allowed, used };
+      }
+
+      // 사용량 카운트 1 증가 (+1)
+      await kvStore.put(`acc:${wallet}:used`, (used + 1).toString());
+      return {
+        plan: 'pro',
+        limits: PRO_LIMITS,
+        userId: wallet,
+        authType: 'solana_wallet',
+        remainingCredits: allowed - (used + 1)
+      };
+    }
+  }
+
+  // ─── 2. Pro API Key 확인 (하위 호환) ───
   const apiKey = request.headers.get('X-API-Key');
 
-  if (!apiKey || !env.API_KEYS) {
-    return { plan: 'free', limits: FREE_LIMITS };
-  }
-
-  // API Key 형식 기본 검증
-  if (!/^aznp_(pro|team)_[a-zA-Z0-9]{16,}$/.test(apiKey)) {
-    return { plan: 'free', limits: FREE_LIMITS };
-  }
-
-  try {
-    const keyData = await env.API_KEYS.get(apiKey, { type: 'json' });
-    if (
-      keyData &&
-      keyData.status === 'active' &&
-      keyData.plan === 'pro' &&
-      (!keyData.expiresAt || new Date(keyData.expiresAt) > new Date())
-    ) {
-      return { plan: 'pro', limits: PRO_LIMITS, userId: keyData.userId };
+  if (apiKey && env.API_KEYS) {
+    if (/^aznp_(pro|team)_[a-zA-Z0-9]{16,}$/.test(apiKey)) {
+      try {
+        const keyData = await env.API_KEYS.get(apiKey, { type: 'json' });
+        if (
+          keyData &&
+          keyData.status === 'active' &&
+          keyData.plan === 'pro' &&
+          (!keyData.expiresAt || new Date(keyData.expiresAt) > new Date())
+        ) {
+          return { plan: 'pro', limits: PRO_LIMITS, userId: keyData.userId, authType: 'api_key' };
+        }
+      } catch (e) {
+        console.error('[AZNP] API_KEYS KV error:', e.message);
+      }
     }
-  } catch (e) {
-    console.error('[AZNP] API_KEYS KV error:', e.message);
   }
 
   return { plan: 'free', limits: FREE_LIMITS };
+}
+
+/**
+ * Solana Ed25519 서명 검증 헬퍼
+ */
+function verifySolanaSignature(message, signatureBase58, publicKeyBase58) {
+  try {
+    const messageBytes = new TextEncoder().encode(message);
+    const signatureBytes = bs58.decode(signatureBase58);
+    // bs58 public key -> Uint8Array (32 bytes)
+    const publicKeyBytes = bs58.decode(publicKeyBase58);
+
+    return nacl.sign.detached.verify(messageBytes, signatureBytes, publicKeyBytes);
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * 402 Payment Required 응답 반환
+ */
+function x402PaymentRequiredResponse(env, message = 'Payment Required') {
+  const payTo = env.SERVICE_WALLET_ADDRESS || 'GuUdPHj3dnafbFvF2gMscCVAMCd4NvSE5ktsrbdAvT4E';
+
+  const paymentDetails = {
+    error: 'Payment Required',
+    message: 'Insufficient credits or missing Solana Wallet authentication signature.',
+    service_wallet: payTo,
+    network: 'solana',
+    currency: 'USDC',
+    min_deposit: '$20 USDC',
+    tiers: {
+      'Pro Agent': '$20 USDC = 12,000 requests ($0.00166/req)',
+      'Enterprise': '$100 USDC = 80,000 requests ($0.00125/req)'
+    },
+    auth_headers_required: {
+      'x-wallet-address': '<SOLANA_PUBLIC_KEY>',
+      'x-signature': '<Ed25519_SIGNATURE_OF_x402:{timestamp}>',
+      'x-timestamp': '<UNIX_TIMESTAMP>'
+    },
+    topup_endpoint: 'POST /v1/topup'
+  };
+
+  return new Response(
+    JSON.stringify(paymentDetails, null, 2),
+    {
+      status: 402,
+      headers: {
+        ...CORS_HEADERS,
+        'Content-Type': 'application/json; charset=utf-8',
+        'PAYMENT-REQUIRED': JSON.stringify({
+          amount: '20.0',
+          currency: 'USDC',
+          network: 'solana',
+          payTo,
+          description: 'AZNP Pro Markdown conversion credits'
+        }),
+      },
+    }
+  );
 }
 
 /**

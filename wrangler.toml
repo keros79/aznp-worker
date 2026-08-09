@@ -4,8 +4,14 @@ compatibility_date = "2024-09-23"
 
 # ─── 환경 변수 ────────────────────────────────────────────────────────────────
 [vars]
-# 업그레이드 페이지 URL (Pages 배포 후 업데이트)
+# 업그레이드 페이지 URL
 UPGRADE_URL = "https://aznp.pages.dev/pricing"
+# Solana 수신 지갑 및 온체인 결제 바인딩
+SERVICE_WALLET_ADDRESS = "GuUdPHj3dnafbFvF2gMscCVAMCd4NvSE5ktsrbdAvT4E"
+SOLANA_RPC_URL = "https://api.mainnet-beta.solana.com"
+USDC_MINT_ADDRESS = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+X402_PRICE_USDC = "0.00166"
+X402_NETWORK = "solana"
 
 # ─── KV Namespace 바인딩 ──────────────────────────────────────────────────────
 [[kv_namespaces]]
