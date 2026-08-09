@@ -1,0 +1,38 @@
+name = "aznp-proxy"
+main = "src/worker.js"
+compatibility_date = "2024-09-23"
+
+# ─── 환경 변수 ────────────────────────────────────────────────────────────────
+[vars]
+# 업그레이드 페이지 URL (Pages 배포 후 업데이트)
+UPGRADE_URL = "https://aznp.pages.dev/pricing"
+
+# ─── KV Namespace 바인딩 ──────────────────────────────────────────────────────
+[[kv_namespaces]]
+binding = "RESULTS_KV"
+id = "45301c3029b84f90830d7275c01a311c"
+
+# Pro API Key 저장소
+[[kv_namespaces]]
+binding = "API_KEYS"
+id = "15e38ac172464389bd646a225c8c0552"
+
+# ─── D1 Database 바인딩 ────────────────────────────────────────────────
+[[d1_databases]]
+binding = "DB"
+database_name = "aznp-analytics"
+database_id = "5ad6d12d-4121-4120-a4b4-bba3f5db93e3"
+
+# ─── (옵션) Browser Rendering 바인딩 (Pro Tier 3) ────────────────────────────
+# [[browser]]
+# binding = "BROWSER"
+
+# ─── 개발 환경 ────────────────────────────────────────────────────────────────
+[dev]
+port = 8787
+local_protocol = "http"
+
+# ─── 프로덕션 환경 (preview 배포용) ──────────────────────────────────────────
+# [env.staging]
+# name = "aznp-proxy-staging"
+# vars = { UPGRADE_URL = "https://staging.aznp.pages.dev/pricing" }

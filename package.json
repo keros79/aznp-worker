@@ -1,0 +1,23 @@
+{
+  "name": "aznp-proxy",
+  "version": "2.1.0",
+  "description": "Agentic Zero-Noise Proxy – AI 에이전트를 위한 초경량 Markdown 프록시",
+  "main": "src/worker.js",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "kv:create:results": "wrangler kv namespace create RESULTS_KV",
+    "kv:create:apikeys": "wrangler kv namespace create API_KEYS",
+    "kv:list": "wrangler kv namespace list",
+    "kv:put:prokey": "wrangler kv key put --namespace-id=<RESULTS_KV_ID>",
+    "test": "echo 'No automated tests yet. Use curl for manual testing.'"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
