@@ -13,6 +13,7 @@
  */
 
 import { convertToCleanMarkdown, estimateTokens, estimateOriginalTokens } from './htmlToMarkdown.js';
+import { compressOpenApiSpec } from './openapiCompressor.js';
 import { checkRateLimit } from './rateLimit.js';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
@@ -186,7 +187,52 @@ export default {
       );
     }
 
-    // ─── 4-b. URL 확장자 기반 조기 Bypass (307 Redirect) ─────────────────────────
+    // ─── 4-b. OpenAPI / Swagger URL 감지 및 처리 ─────────────────────────────────
+    // URL 패턴(openapi.json, swagger.json 등) 감지 시:
+    // Pro 플랜 → 90% 압축된 초경량 OpenAPI 스펙 반환
+    // Free 플랜 → 원본 URL로 307 Redirect (바이패스)
+    if (isOpenApiUrl(targetUrl)) {
+      if (planInfo.plan === 'pro') {
+        try {
+          const specRes = await fetch(targetUrl, {
+            headers: { 'User-Agent': 'AgenticZeroNoiseProxy/2.1 (+https://aznp.pages.dev)' },
+            signal: AbortSignal.timeout(10000),
+          });
+          if (specRes.ok) {
+            const specText = await specRes.text();
+            const compressedSpec = compressOpenApiSpec(specText);
+            const origTokens = estimateOriginalTokens(specText);
+            const compTokens = estimateTokens(compressedSpec);
+
+            return new Response(compressedSpec, {
+              status: 200,
+              headers: {
+                ...CORS_HEADERS,
+                'Content-Type': 'application/json; charset=utf-8',
+                'X-AZNP-Plan': 'pro',
+                'X-AZNP-Source': 'openapi-compressed',
+                'X-AZNP-Cache': 'MISS',
+                'X-Markdown-Tokens': String(compTokens),
+                'X-Original-Tokens': String(origTokens),
+                'X-Token-Reduction': `${Math.max(0, Math.round((1 - compTokens / origTokens) * 100))}%`,
+                'X-RateLimit-Remaining': String(rateLimitResult.remaining),
+              },
+            });
+          }
+        } catch (e) {
+          console.error('[AZNP] OpenAPI fetch error:', e.message);
+        }
+      }
+
+      // Free 플랜 사용자는 에러 차단 대신 원본 URL로 307 Redirect (바이패스)
+      return buildBypassRedirect(targetUrl, {
+        contentType: 'application/json (openapi-free-bypass)',
+        rateLimitRemaining: rateLimitResult.remaining,
+        plan: planInfo.plan,
+      });
+    }
+
+    // ─── 4-c. URL 확장자 기반 조기 Bypass (307 Redirect) ─────────────────────────
     // fetch 없이 URL 패턴만으로 판별해 원본 URL로 직접 redirect합니다.
     if (isBypassExtension(targetUrl)) {
       return buildBypassRedirect(targetUrl, {
@@ -774,6 +820,24 @@ async function hashUrl(url) {
       hash |= 0;
     }
     return Math.abs(hash).toString(36);
+  }
+}
+
+/**
+ * OpenAPI / Swagger URL 패턴 판별
+ * (openapi.json, swagger.json, openapi.yaml, swagger.yaml 등)
+ */
+function isOpenApiUrl(urlStr) {
+  try {
+    const pathname = new URL(urlStr).pathname.toLowerCase();
+    const openApiPatterns = [
+      'openapi.json', 'swagger.json',
+      'openapi.yaml', 'swagger.yaml',
+      'openapi.yml', 'swagger.yml',
+    ];
+    return openApiPatterns.some(pattern => pathname.endsWith(pattern) || pathname.includes(`/${pattern}`));
+  } catch {
+    return false;
   }
 }
 
