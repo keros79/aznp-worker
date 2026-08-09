@@ -8,6 +8,7 @@
 ## 💡 핵심 특징
 
 - **75~90% 토큰 절감**: 지저분한 HTML(광고, 네비게이션, CSS/JS 등)을 완벽 제거해 LLM 비용 극대화
+- **File Bypass**: PDF·이미지·영상 등 파일 URL은 변환 없이 투명 프록시 처리 — `X-AZNP-Bypass: true` 헤더로 식별
 - **Solana Wallet-based Stateless Auth**: 회원가입이나 API Key 발급 없이 **본인의 솔라나 지갑 주소(PublicKey)** 자체를 계정 ID로 사용
 - **AI 표준 규격 노출**: 도메인 루트에서 `/llms.txt`, `/llms-full.txt`, `/openapi.json`을 제공하여 AI 에이전트들이 스스로 학습하고 이용 가능
 - **3-Tier Cascading Engine**: Tier 1 (Cloudflare Native) → Tier 2 (자체 고속 변환) → Tier 3 (Browser Rendering `render=true`)
@@ -70,6 +71,17 @@ curl -X GET "https://aznp-proxy.kerberos79.workers.dev/?url=https://news.ycombin
 | `max_tokens` | `0` | 최대 토큰 제한 |
 | `images` | `1` | `0` → 이미지 제외 |
 
+#### 응답 헤더
+
+| 헤더 | 설명 |
+|--------|------|
+| `X-AZNP-Plan` | 현재 플랜 (`free` / `pro`) |
+| `X-AZNP-Source` | 변환 방식 (`cloudflare-native`, `aznp-self`, `bypass` 등) |
+| `X-AZNP-Cache` | 캐시 상태 (`HIT` / `MISS` / `BYPASS`) |
+| `X-Token-Reduction` | 토큰 절감률 (ex: `87%`) |
+| `X-AZNP-Bypass` | `true` → 파일 URL로 인해 bypass 적용됨 |
+| `X-AZNP-Bypass-Reason` | bypass 원인이 된 Content-Type |
+
 ---
 
 ### 3. AI 표준 문서 엔드포인트
@@ -81,6 +93,32 @@ curl -X GET "https://aznp-proxy.kerberos79.workers.dev/?url=https://news.ycombin
 | `GET /openapi.json` | OpenAPI 3.0.3 표준 JSON 스펙 (Custom GPTs / LangChain 연동용) |
 | `GET /robots.txt` | AI 에이전트/크롤러 접근 허용 규칙 |
 | `GET /health` | 서비스 헬스체크 |
+
+---
+
+## 📦 File Bypass 동작
+
+AZNP는 HTML이 아닌 파일 URL을 탐지하면 **변환 없이 원본 응답을 투명하게 프록시**합니다.
+
+### Bypass 대상 조건
+
+| 방식 | 예시 |
+|------|------|
+| **URL 확장자 기반** (조기 판별) | `.pdf`, `.png`, `.mp4`, `.zip`, `.docx` 등 |
+| **Content-Type 기반** | `image/*`, `video/*`, `audio/*`, `application/pdf` 등 |
+
+### Bypass 응답 예시
+
+```bash
+# PDF 요청 시 변환 없이 원본 PDF 바이트가 그대로 전달됩니다.
+curl -I "https://aznp-proxy.kerberos79.workers.dev/?url=https://example.com/report.pdf"
+# X-AZNP-Bypass: true
+# X-AZNP-Bypass-Reason: application/pdf
+# X-AZNP-Source: bypass
+# X-AZNP-Cache: BYPASS
+```
+
+> **Note**: Bypass 응답은 KV/Cache에 저장되지 않습니다. 토큰 절감률 헤더도 포함되지 않습니다.
 
 ---
 

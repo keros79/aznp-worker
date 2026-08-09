@@ -9,6 +9,7 @@
  *  - KV Sliding Window Rate Limit (15 RPM / 1,000 RPD)
  *  - Pro 기능 조기 차단 (403)
  *  - crypto.subtle 기반 URL 해시
+ *  - File Bypass: PDF·이미지·영상 등 파일은 변환 없이 투명 프록시 처리
  */
 
 import { convertToCleanMarkdown, estimateTokens, estimateOriginalTokens } from './htmlToMarkdown.js';
@@ -51,6 +52,30 @@ const CORS_HEADERS = {
   'Access-Control-Expose-Headers':
     'X-AZNP-Plan, X-AZNP-Source, X-AZNP-Cache, X-Token-Reduction, X-Markdown-Tokens, X-Original-Tokens, X-RateLimit-Remaining, X-RateLimit-Reset, PAYMENT-REQUIRED',
 };
+
+// ─── Bypass 대상 MIME 타입 프리픽스 ─────────────────────────────────────────────
+// 아래 타입은 HTML 변환 없이 원본 응답을 그대로 투명 프록시(bypass) 처리합니다.
+const BYPASS_MIME_PREFIXES = [
+  'application/pdf',
+  'application/zip', 'application/x-zip', 'application/x-gzip',
+  'application/octet-stream',
+  'application/msword', 'application/vnd.',
+  'image/',
+  'video/',
+  'audio/',
+  'font/',
+];
+
+// ─── Bypass 대상 URL 확장자 (fetch 전 조기 판별) ─────────────────────────────────
+const BYPASS_EXTENSIONS = new Set([
+  'pdf', 'zip', 'gz', 'tar', 'rar', '7z', 'bz2',
+  'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp', 'avif', 'tiff',
+  'mp4', 'webm', 'mov', 'avi', 'mkv', 'wmv',
+  'mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a',
+  'woff', 'woff2', 'ttf', 'eot', 'otf',
+  'exe', 'dmg', 'pkg', 'deb', 'apk', 'msi',
+  'xls', 'xlsx', 'doc', 'docx', 'ppt', 'pptx',
+]);
 
 // ─── Worker 메인 핸들러 ───────────────────────────────────────────────────────
 
@@ -161,6 +186,16 @@ export default {
       );
     }
 
+    // ─── 4-b. URL 확장자 기반 조기 Bypass (307 Redirect) ─────────────────────────
+    // fetch 없이 URL 패턴만으로 판별해 원본 URL로 직접 redirect합니다.
+    if (isBypassExtension(targetUrl)) {
+      return buildBypassRedirect(targetUrl, {
+        contentType: 'file/extension-matched',
+        rateLimitRemaining: rateLimitResult.remaining,
+        plan: planInfo.plan,
+      });
+    }
+
     // ─── 5. 캐시 키 생성 ──────────────────────────────────────────────────────
     // 캐시에 영향을 주는 파라미터만 포함
     const canonicalParams = new URLSearchParams();
@@ -240,6 +275,14 @@ export default {
           });
 
           const contentType = nativeRes.headers.get('content-type') || '';
+          // 파일 Content-Type 감지 → 307 Redirect로 원본 URL으로 직접 안내
+          if (isBypassContentType(contentType)) {
+            return buildBypassRedirect(targetUrl, {
+              contentType,
+              rateLimitRemaining: rateLimitResult.remaining,
+              plan: planInfo.plan,
+            });
+          }
           if (nativeRes.ok && contentType.includes('text/markdown')) {
             markdown = await nativeRes.text();
             source = 'cloudflare-native';
@@ -307,11 +350,12 @@ export default {
 
           const ct = htmlRes.headers.get('content-type') || '';
           if (!ct.includes('text/html') && !ct.includes('application/xhtml')) {
-            // HTML이 아닌 경우 (PDF, 이미지 등)
-            return jsonResponse(
-              { error: `Unsupported content type: ${ct}. Only HTML pages are supported.` },
-              415
-            );
+            // HTML이 아닌 경우 (PDF, 이미지, 바이너리 등) → 307 Redirect
+            return buildBypassRedirect(targetUrl, {
+              contentType: ct,
+              rateLimitRemaining: rateLimitResult.remaining,
+              plan: planInfo.plan,
+            });
           }
 
           html = await htmlRes.text();
@@ -731,6 +775,55 @@ async function hashUrl(url) {
     }
     return Math.abs(hash).toString(36);
   }
+}
+
+/**
+ * URL 확장자 기반 Bypass 판별
+ * 네트워크 fetch 없이 URL 패턴만으로 파일 여부를 조기 판단합니다.
+ */
+function isBypassExtension(urlStr) {
+  try {
+    const pathname = new URL(urlStr).pathname.toLowerCase();
+    const ext = pathname.split('.').pop()?.split('?')[0] || '';
+    return BYPASS_EXTENSIONS.has(ext);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Content-Type 기반 Bypass 판별
+ */
+function isBypassContentType(ct) {
+  if (!ct) return false;
+  const lower = ct.toLowerCase().split(';')[0].trim();
+  return BYPASS_MIME_PREFIXES.some(prefix => lower.startsWith(prefix));
+}
+
+/**
+ * 파일 Bypass — 307 Temporary Redirect
+ * - Worker가 파일 데이터를 메모리에 올리지 않고 Agent를 원본 URL로 직접 안내
+ * - CF Workers 메모리(128MB) 및 대역폭 비용 제로
+ * - Agent는 307 후 자동으로 원본 URL에 직접 접속 (HTTP 클라이언트 기본 동작)
+ */
+function buildBypassRedirect(targetUrl, opts = {}) {
+  const { contentType, rateLimitRemaining, plan } = opts;
+
+  const headers = new Headers({
+    ...CORS_HEADERS,
+    'Location': targetUrl,
+    'X-AZNP-Bypass': 'true',
+    'X-AZNP-Bypass-Reason': contentType || 'file',
+    'X-AZNP-Plan': plan || 'free',
+    'X-AZNP-Source': 'bypass-redirect',
+    'X-AZNP-Cache': 'BYPASS',
+  });
+
+  if (rateLimitRemaining !== undefined) {
+    headers.set('X-RateLimit-Remaining', String(rateLimitRemaining));
+  }
+
+  return new Response(null, { status: 307, headers });
 }
 
 /**
