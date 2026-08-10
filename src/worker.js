@@ -573,19 +573,27 @@ async function handleTopup(request, env) {
       addedCredits = Math.floor(amountUSDC * 600); // Pro Agent Tier
     }
 
-    // ⑥ KV 중복 마킹 (30일 TTL) 및 허용 크레딧 누적
+    // ⑥ KV 중복 마킹 (30일 TTL) 및 남은 크레딧 count 저장
     await kvStore.put(`tx:${tx_hash}`, 'processed', { expirationTtl: 2592000 });
 
-    const currentAllowed = parseInt((await kvStore.get(`acc:${wallet}:allowed`)) || '0', 10);
-    const newAllowed = currentAllowed + addedCredits;
-    await kvStore.put(`acc:${wallet}:allowed`, newAllowed.toString());
+    let currentCount = parseInt((await kvStore.get(`acc:${wallet}:count`)) || '-1', 10);
+    if (currentCount < 0) {
+      const allowed = parseInt((await kvStore.get(`acc:${wallet}:allowed`)) || '0', 10);
+      const used = parseInt((await kvStore.get(`acc:${wallet}:used`)) || '0', 10);
+      currentCount = Math.max(0, allowed - used);
+    }
+
+    const newCount = currentCount + addedCredits;
+    await kvStore.put(`acc:${wallet}:count`, newCount.toString());
+    await kvStore.put(`acc:${wallet}:allowed`, newCount.toString());
 
     return jsonResponse({
       success: true,
       wallet,
       deposited_usdc: amountUSDC,
       added_credits: addedCredits,
-      total_allowed_requests: newAllowed
+      total_allowed_requests: newCount,
+      remaining_count: newCount
     }, 200);
 
   } catch (err) {
@@ -618,26 +626,36 @@ async function getPlan(request, env) {
     const isValidSig = verifySolanaSignature(message, signature, wallet);
 
     if (isValidSig && kvStore) {
-      const allowed = parseInt((await kvStore.get(`acc:${wallet}:allowed`)) || '0', 10);
-      const used = parseInt((await kvStore.get(`acc:${wallet}:used`)) || '0', 10);
+      let count = parseInt((await kvStore.get(`acc:${wallet}:count`)) || '-1', 10);
 
-      if (used >= allowed) {
-        return { plan: 'solana_insufficient', limits: FREE_LIMITS, wallet, allowed, used };
+      // 하위 호환성: 기존 acc:${wallet}:allowed 및 used 기준 데이터 마이그레이션
+      if (count < 0) {
+        const allowed = parseInt((await kvStore.get(`acc:${wallet}:allowed`)) || '0', 10);
+        const used = parseInt((await kvStore.get(`acc:${wallet}:used`)) || '0', 10);
+        count = allowed - used;
       }
 
-      // 사용량 카운트 1 증가 (+1)
-      await kvStore.put(`acc:${wallet}:used`, (used + 1).toString());
+      // count가 0 이하일 경우 무료 플랜으로 동작
+      if (count <= 0) {
+        return { plan: 'free', limits: FREE_LIMITS, wallet, remainingCount: 0 };
+      }
+
+      // 유료 요청 1회당 count -1 차감
+      const updatedCount = count - 1;
+      await kvStore.put(`acc:${wallet}:count`, updatedCount.toString());
+
       return {
         plan: 'pro',
         limits: PRO_LIMITS,
         userId: wallet,
         authType: 'solana_wallet',
-        remainingCredits: allowed - (used + 1)
+        remainingCredits: updatedCount,
+        remainingCount: updatedCount
       };
     }
   }
 
-  // ─── 2. Pro API Key 확인 (하위 호환) ───
+  // ─── 2. Pro API Key 확인 (하위 호환 및 count 차감) ───
   const apiKey = request.headers.get('X-API-Key');
 
   if (apiKey && env.API_KEYS) {
@@ -650,6 +668,25 @@ async function getPlan(request, env) {
           keyData.plan === 'pro' &&
           (!keyData.expiresAt || new Date(keyData.expiresAt) > new Date())
         ) {
+          // keyData에 count 필드가 설정되어 있는 경우 검사 및 -1 차감
+          if (keyData.count !== undefined) {
+            if (keyData.count <= 0) {
+              return { plan: 'free', limits: FREE_LIMITS, userId: keyData.userId, authType: 'api_key' };
+            }
+            keyData.count = keyData.count - 1;
+            await env.API_KEYS.put(apiKey, JSON.stringify(keyData));
+          } else {
+            // KV에 개별 acc:${apiKey}:count 키가 존재하는지 확인
+            const apiCountRaw = await env.API_KEYS.get(`acc:${apiKey}:count`);
+            if (apiCountRaw !== null) {
+              const apiCount = parseInt(apiCountRaw, 10);
+              if (apiCount <= 0) {
+                return { plan: 'free', limits: FREE_LIMITS, userId: keyData.userId, authType: 'api_key' };
+              }
+              await env.API_KEYS.put(`acc:${apiKey}:count`, (apiCount - 1).toString());
+            }
+          }
+
           return { plan: 'pro', limits: PRO_LIMITS, userId: keyData.userId, authType: 'api_key' };
         }
       } catch (e) {
