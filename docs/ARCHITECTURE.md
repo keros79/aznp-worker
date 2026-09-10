@@ -16,7 +16,7 @@ AZNP(AZNP)는 Cloudflare Workers 단일 워커(`src/worker.js`) 기반의 Markdo
 클라이언트 요청
    │
    ▼
-[1] 라우팅        GET /health · POST /v1/topup · GET /?url=... (그 외 404)
+[1] 라우팅        GET /health · /llms.txt · /llms-full.txt · /openapi.json · /robots.txt · POST /v1/topup · GET /?url=... (그 외 404)
    ▼
 [2] 인증/플랜     getPlan(): resolveChain → Solana Ed25519 | Base EIP-191/712 → API Key → Free
    ▼
@@ -29,6 +29,7 @@ AZNP(AZNP)는 Cloudflare Workers 단일 워커(`src/worker.js`) 기반의 Markdo
 [6] Tier 변환     Tier1(CF Native) → Tier2(자체 변환) → Tier3(Browser Rendering, Pro 전용)
    ▼
 [7] 응답          markdown/json/toml/yaml/json-ld 직렬화(`src/formatters.js`) + truncate 후처리 + X-AZNP-* 메타 헤더
+                 (YAML은 flat 스키마 `title`/`source`/`content: |`가 정본 — 헤딩 중첩 맵 아님, TASKS 2.6)
 ```
 
 ## 3. 인증 레이어 (결제/인증과 변환 분리)
@@ -57,8 +58,11 @@ AZNP(AZNP)는 Cloudflare Workers 단일 워커(`src/worker.js`) 기반의 Markdo
 ```
 ├── src/
 │   ├── worker.js            # main fetch 핸들러 + topup/getPlan/402 응답
+│   ├── discovery.js         # AI 발견 문서 (/llms.txt · /llms-full.txt · /openapi.json · /robots.txt)
 │   ├── walletAuth.js        # 멀티체인 인증·체인 식별·전송 이벤트 상수
 │   ├── htmlToMarkdown.js    # Tier 2 HTML→Markdown 변환 + 토큰 추정
+│   ├── formatters.js        # 응답 포맷 직렬화 (markdown/toml/yaml/json-ld/json) — flat YAML 정본
+│   ├── truncate.js          # max_tokens 블록 단위 압축
 │   ├── openapiCompressor.js # OpenAPI 스펙 압축
 │   └── rateLimit.js         # KV 슬라이딩 윈도우 rate limit
 ├── docs/

@@ -1,64 +1,53 @@
-# AZNP – Agentic Zero-Noise Proxy v2.1
+# AZNP – Agentic Zero-Noise Proxy
 
-> AI 에이전트를 위한 **Zero-Noise Markdown 프록시 & Stateless Payment Edge API**  
-> 웹페이지를 초경량 Clean Markdown으로 변환해 LLM 토큰 비용을 75~90% 절감합니다.
+> AI 에이전트를 위한 **Zero-Noise Markdown 프록시** — 공개 무료(public good).  
+> 웹페이지를 초경량 Clean Markdown으로 변환해 LLM 토큰 비용을 75~90% 절감합니다.  
+> 지갑·API Key 없이 누구나 호출할 수 있으며, Solana Ed25519 서명은 **신원(identity)** 용도로 선택 사용합니다.
 
 ---
 
 ## 💡 핵심 특징
 
-- **75~90% 토큰 절감**: 지저분한 HTML(광고, 네비게이션, CSS/JS 등)을 완벽 제거해 LLM 비용 극대화
-- **Pro OpenAPI Spec Compression**: `openapi.json` / `swagger.json` URL 요청 시 80~90% 초경량 파싱 및 압축 반환 (Pro 전용, Free는 307 Redirect)
+- **무료 convert**: `GET /?url=...` — 로그인·API Key·크레딧 없이 바로 200. `markdown` / `json` / `toml` / `yaml` / `json-ld` 전 포맷 지원
+- **`max_tokens`**: 출력을 토큰 예산 안에서 블록 단위로 절단 (무료)
+- **75~90% 토큰 절감**: 지저분한 HTML(광고, 네비게이션, CSS/JS 등)을 제거해 LLM 비용 극대화
+- **Solana Ed25519 무상태 인증 (선택)**: 본인 지갑 키페어가 곧 계정 ID. 가입·API Key 발급 불필요, 서버는 비밀키를 받지 않음 (요청 신원용)
+- **Pro OpenAPI Spec Compression**: `openapi.json` / `swagger.json` URL 요청 시 80~90% 초경량 압축 반환 (Pro 전용, Free는 307 Redirect)
 - **File Bypass**: PDF·이미지·영상 등 파일 URL은 변환 없이 원본으로 307 Redirect 처리
-- **Multi-Chain Wallet-based Stateless Auth**: 회원가입이나 API Key 발급 없이 본인 지갑 주소를 계정 ID로 사용 — **Solana(Ed25519)** + **Base(EIP-191 / EIP-712)** 지원, 체인별 독립 크레딧(`acc:` / `acc:base:`)과 native USDC 충전
-- **AI 표준 규격 노출**: 도메인 루트에서 `/llms.txt`, `/llms-full.txt`, `/openapi.json`을 제공하여 AI 에이전트들이 스스로 학습하고 이용 가능
+- **AI 표준 규격 노출**: `/llms.txt` · `/llms-full.txt` · `/openapi.json` — 인증 없이 200
 - **3-Tier Cascading Engine**: Tier 1 (Cloudflare Native) → Tier 2 (자체 고속 변환) → Tier 3 (Browser Rendering `render=true`)
 - **다층 에지 캐시**: Cache API (L1) + Cloudflare KV (L2) 이중 캐싱으로 초고속 응답 (CPU 시간 최소화)
 
----
-
-## 💳 요금 체계 (Solana USDC)
-
-AI 에이전트 및 이용자를 위한 마이크로페이먼트 요금 구조입니다.
-
-| 티어 | 최소 충전액 | 부여 크레딧 (요청 횟수) | 건당 단가 | 출금 수수료(0.7 USDC) 비중 | LLM 토큰 절감 가치 |
-|------|------------|------------------------|-----------|--------------------------------|-------------------|
-| **Pro Agent** | **$20 USDC** | **12,000회** | **$0.00166** (약 2.1원) | **3.5%** (카드 수수료 수준) | 약 $840 (약 110만원 절감) |
-| **Enterprise** | **$100 USDC** | **80,000회** | **$0.00125** (약 1.6원) | **0.7%** (수수료 극소화) | 약 $5,600 (약 730만원 절감) |
-
-- **최소 충전 요건**: **$20 USDC** ($20 미만 입금 시 충전 거부)
-- **수신 서비스 지갑 주소 (Solana)**: `GuUdPHj3dnafbFvF2gMscCVAMCd4NvSE5ktsrbdAvT4E`
-- **USDC Mint Address**: `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
+> **그랜트 범위**: Base(EVM L2) 멀티체인·유료 크레딧(topup)·Browser Rendering은 **코드는 유지**하되 이번 Superteam 그랜트 제품이 아닙니다 (아래 "Out of grant scope" 참고).
 
 ---
 
-## 🚀 사용법 및 API 규격
-
-### 1. 온체인 충전 (`POST /v1/topup`)
-
-USDC 입금 후 트랜잭션 해시(`tx_hash`)와 본인의 지갑 주소(`wallet`)를 제출하여 크레딧을 충전합니다.
+## 🚀 사용법 — 무료 즉시 시작 (인증 불필요)
 
 ```bash
-curl -X POST "https://aznp-proxy.kerberos79.workers.dev/v1/topup" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "wallet": "7xKX...AgentSolanaPublicKey",
-    "tx_hash": "5K...SolanaTransactionHash"
-  }'
+# 기본 Markdown
+curl "https://aznp-proxy.kerberos79.workers.dev/?url=https://news.ycombinator.com"
+
+# 구조화 JSON (무료)
+curl "https://aznp-proxy.kerberos79.workers.dev/?url=https://example.com&format=json"
+
+# 토큰 예산 (무료)
+curl "https://aznp-proxy.kerberos79.workers.dev/?url=https://example.com&max_tokens=2000"
 ```
 
+선택적으로 Solana 지갑 서명을 추가하면 요청 신원 + 상위 Rate Limit을 받습니다 (아래 "Solana 서명 (선택)" 참고).
+
 ---
 
-### 2. Markdown 변환 요청 (`GET /?url=...`)
+## 🚀 API 규격
 
-에이전트는 API 호출 시 `x402:{timestamp}` 메시지를 본인의 Solana 비밀키로 Ed25519 서명하여 헤더로 전달합니다.
+### 1. Markdown 변환 요청 (`GET /?url=...`)
 
-#### 기본 요청
+변환 자체는 **인증 없이 무료**입니다. Solana Ed25519 서명은 선택 사항(요청 신원 표시)입니다.
+
+#### 기본 요청 (서명 없이)
 ```bash
-curl -X GET "https://aznp-proxy.kerberos79.workers.dev/?url=https://news.ycombinator.com" \
-  -H "x-wallet-address: 7xKX...AgentSolanaPublicKey" \
-  -H "x-timestamp: 1786249000" \
-  -H "x-signature: 3mZ...Ed25519SignatureBase58"
+curl "https://aznp-proxy.kerberos79.workers.dev/?url=https://news.ycombinator.com"
 ```
 
 #### 주요 쿼리 파라미터
@@ -66,11 +55,12 @@ curl -X GET "https://aznp-proxy.kerberos79.workers.dev/?url=https://news.ycombin
 | 파라미터 | 기본값 | 설명 |
 |----------|--------|------|
 | `url` | 필수 | 대상 웹페이지 URL |
-| `render` | `false` | `true` → JS 렌더링 강제 (Tier 3 Browser Rendering) |
-| `mode` | `auto` | `auto` / `summary` (요약 모드) |
-| `format` | `markdown` | `markdown` (기본) / `json` / `toml` / `yaml` / `json-ld` (구조화는 Pro) |
-| `max_tokens` | `0` | 최대 토큰 제한 |
+| `format` | `markdown` | `markdown` (기본) / `json` / `toml` / `yaml` / `json-ld` — **전 포맷 무료** |
+| `max_tokens` | `0` | 최대 토큰 제한 (**무료**) |
 | `images` | `1` | `0` → 이미지 제외 |
+| `mode` | `auto` | `auto` / `summary` (summary는 Pro) |
+| `render` | `false` | `true` → JS 렌더링 강제 (Pro) |
+| `fresh` | `0` | `1` → 캐시 우회 |
 
 #### 응답 헤더
 
@@ -85,15 +75,30 @@ curl -X GET "https://aznp-proxy.kerberos79.workers.dev/?url=https://news.ycombin
 
 ---
 
-### 3. AI 표준 문서 엔드포인트
+### 2. Solana 서명 (선택 — 신원 확인)
+
+지갑 키페어로 `x402:{timestamp}` 메시지를 Ed25519 서명해 헤더로 보내면, 요청 신원을 확인하고 상위 Rate Limit을 적용합니다. (가입·API Key 발급 불필요, 서버는 비밀키를 받지 않습니다.)
+
+```bash
+curl "https://aznp-proxy.kerberos79.workers.dev/?url=https://news.ycombinator.com" \
+  -H "x-wallet-address: 7xKX...AgentSolanaPublicKey" \
+  -H "x-timestamp: 1786249000" \
+  -H "x-signature: 3mZ...Ed25519SignatureBase58"
+```
+
+> Base(EVM L2) 지갑 서명(EIP-191 / EIP-712)도 **코드는 유지**되나 그랜트 서사에는 포함하지 않습니다.
+
+---
+
+### 3. AI 표준 문서 엔드포인트 (인증 없이 200)
 
 | 엔드포인트 | 설명 |
 |------------|------|
-| `GET /llms.txt` | LLM AI 에이전트용 요약 가이드 (API 개요, 요금, 헤더) |
-| `GET /llms-full.txt` | 전체 API 명세 및 Node.js/Python 코드 예시 |
+| `GET /llms.txt` | LLM AI 에이전트용 요약 가이드 (무료 convert, Solana 서명) |
+| `GET /llms-full.txt` | 전체 API 명세 및 에러 코드, Node.js/Python 예시 |
 | `GET /openapi.json` | OpenAPI 3.0.3 표준 JSON 스펙 (Custom GPTs / LangChain 연동용) |
 | `GET /robots.txt` | AI 에이전트/크롤러 접근 허용 규칙 |
-| `GET /health` | 서비스 헬스체크 |
+| `GET /health` | 서비스 헬스체크 (`auth: solana-ed25519`)
 
 ---
 
@@ -169,6 +174,40 @@ database_id = "5ad6d12d-4121-4120-a4b4-bba3f5db93e3"
 [browser]
 binding = "BROWSER"
 ```
+
+---
+
+## 🚫 Out of grant scope (그랜트 제품 아님 — 코드는 유지)
+
+아래 기능은 **호환성·기존 사용자**를 위해 코드는 그대로 유지하지만, 이번 Superteam 마이크로그랜트($10k)의 **제품·서사에 포함하지 않습니다**.
+
+### 유료 크레딧 — 온체인 충전 (`POST /v1/topup`, Solana/Base USDC)
+
+| 티어 | 최소 충전액 | 부여 크레딧 (요청 횟수) | 건당 단가 |
+|------|------------|------------------------|-----------|
+| **Pro Agent** | **$20 USDC** | **12,000회** | **$0.00166** |
+| **Enterprise** | **$100 USDC** | **80,000회** | **$0.00125** |
+
+```bash
+curl -X POST "https://aznp-proxy.kerberos79.workers.dev/v1/topup" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "wallet": "7xKX...AgentSolanaPublicKey",
+    "tx_hash": "5K...SolanaTransactionHash"
+  }'
+```
+
+- 수신 서비스 지갑 (Solana): `GuUdPHj3dnafbFvF2gMscCVAMCd4NvSE5ktsrbdAvT4E`
+- USDC Mint: `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
+- Lemon Squeezy / 수동 Pro API Key (`X-API-Key: aznp_pro_...`)도 존재하나 그랜트 제품 아님
+
+### Base (EVM L2) 멀티체인
+
+Solana 외 Base 지갑(EIP-191 / EIP-712) 인증·Base native USDC 충전·`networks[]`의 base 객체는 **코드로 지원**하되, 그랜트 서사·README 앞면·`/health` 카피에서는 제외합니다.
+
+### Browser Rendering (Pro Tier 3)
+
+`render=true` 시 JS 렌더링 폴백 경로는 유지하되, 완전 연동·정식 기능은 **이번 그랜트 범위 밖**입니다.
 
 ---
 

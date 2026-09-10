@@ -118,8 +118,8 @@ AI Agent
 | Tier 2 (자체 변환) | ✅ (경량) | ✅ (Advanced Extraction) |
 | JS Rendering (Tier 3) | ❌ | ✅ |
 | Summary Mode (`mode=summary`) | ❌ | ✅ |
-| Max Tokens 제한 | ❌ | ✅ |
-| Structured Output (JSON) | ❌ | ✅ |
+| Max Tokens 제한 | ✅ (TASKS 3.3 무료화) | ✅ |
+| Structured Output (json/toml/yaml/json-ld) | ✅ (TASKS 3.3 무료화) | ✅ |
 | Rate Limit | 15 RPM / 1,000 RPD | 120 RPM / 20,000 RPD |
 | Cache TTL (Cache API) | 1시간 | 6시간 + SWR |
 | KV 결과 캐시 | 기본 | 더 긴 TTL + 우선 |
@@ -203,9 +203,11 @@ GET https://aznp.yourdomain.workers.dev/?url=https://example.com/article
 |----------|------|------|------|
 | `url` | ✅ | 대상 웹페이지 URL | Free/Pro |
 | `mode` | ❌ | `auto` (기본) / `summary` | summary는 Pro |
-| `max_tokens` | ❌ | 반환 Markdown 최대 토큰 수 | Pro |
+| `max_tokens` | ❌ | 반환 Markdown 최대 토큰 수 | **Free/Pro** (TASKS 3.3 무료화) |
 | `render` | ❌ | `true` → JS 렌더링 강제 | Pro |
-| `format` | ❌ | `markdown` (기본) / `json` / `toml` / `yaml` / `json-ld` | `json`·`toml`·`yaml`·`json-ld`는 Pro |
+| `format` | ❌ | `markdown` (기본) / `json` / `toml` / `yaml` / `json-ld` | **전 포맷 Free/Pro** (TASKS 3.3 무료화) |
+
+> **YAML 정본**: `format=yaml`은 **flat 스키마** — `title` / `source` / `tokens` / `meta` / `content: |` (literal block). 2.1 설계 시 고려했던 “헤딩 중첩 맵”은 구현하지 않는다 (TASKS 2.6 검증에서 확정).
 | `fresh` | ❌ | `1` → 캐시 무시하고 강제 갱신 | Free/Pro |
 | `images` | ❌ | `0` → 이미지 관련 텍스트 최소화 | Free/Pro |
 
@@ -672,6 +674,8 @@ CREATE TABLE usage_logs (
 CREATE INDEX idx_user_created ON usage_logs(user_id, created_at);
 ```
 
+> **현황 (TASKS 3.5)**: D1 통계 **INSERT는 미구현** 상태입니다. 워커(`src/worker.js`)에 `env.DB` 기록 코드가 없으며, `ctx.waitUntil()` 비동기 기록도 구현 전입니다. 토큰 통계는 현재 응답 헤더(`X-Markdown-Tokens` / `X-Original-Tokens` / `X-Token-Reduction`)로만 제공됩니다. D1 연동은 그랜트 범위 밖(v3.0 이후 후순위)입니다.
+
 ---
 
 ## 8. 배포 가이드
@@ -730,7 +734,7 @@ aznp_pro_<random_32_chars>
 | v2.1 | 다층 캐시 + CPU/토큰 최적화 | ✅ |
 | v2.1.1 | **Multi-Chain 온체인 결제 (현재)** — Solana Ed25519 + Base EIP-191/EIP-712 지갑 인증, Solana/Base native USDC 충전, 402 멀티체인 응답 | ✅ |
 | v2.2 | 실제 Rate Limit (KV sliding window, `src/rateLimit.js`) | ✅ |
-| v2.7 | **AI Agent 응답 포맷 (현재)** — `format=toml/yaml/json-ld`, `max_tokens` 블록 단위 절단(`src/truncate.js`), LLM-readable 에러(TOML 기본) | 검증 중 |
+| v2.7 | **AI Agent 응답 포맷** — `format=toml/yaml/json-ld`, `max_tokens` 블록 단위 절단(`src/truncate.js`), LLM-readable 에러(TOML 기본). YAML은 flat 스키마가 정본 | ✅ (2.6 검증 완료) |
 | v2.7.1 | 제출 전 공개 표면 — 레포 Public, LICENSE, Solana-first 카피, convert 무료 (`docs/TASKS.md` 3단계) | 높음 |
 | v2.8 | **Superteam $10k** — `@aznp/mcp-server` ($5k) + Eliza 또는 Agent Kit ($3k) + 유지보수 4개월 ($2k). Base 코드 유지, 그랜트 서사에서만 제외 | 높음 |
 | v2.3 | Browser Rendering 완전 연동 | 그랜트 후 |

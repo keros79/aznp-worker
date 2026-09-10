@@ -20,8 +20,8 @@
 | 단계 | 내용 | 금액 | 상태 |
 |------|------|------|------|
 | 0–1 | 기반 + Base 멀티체인 (코드 유지) | — | 완료 |
-| 2 | 포맷 / `max_tokens` / LLM 에러 | — | 구현됨, **2.6 검증 미완** |
-| 3 | 제출 전 공개 표면 (레포 Public, Solana-first 카피, convert 무료) | 지급 아님 | **← 현재** |
+| 2 | 포맷 / `max_tokens` / LLM 에러 | — | 완료 (2.6 검증 67/67 PASS) |
+| 3 | 제출 전 공개 표면 (레포 Public, Solana-first 카피, convert 무료) | 지급 아님 | 3.2–3.6 완료, **3.1 레포 Public 대기(사용자가 GitHub에서)** |
 | 4 | Superteam 제안서 $10k | 지급 아님 | 대기 |
 | 5 | `@aznp/mcp-server` 구현·배포 | **$5,000** | 대기 |
 | 6 | Eliza OS 플러그인 또는 Solana Agent Kit 툴 + 데모 | **$3,000** | 대기 |
@@ -221,7 +221,7 @@
   ...markdown...
   """
   ```
-- [x] **YAML** — 헤딩 계층을 중첩 맵으로 파싱 (H1→H2→본문). 헤딩이 거의 없으면 TOML과 같은 flat `title` / `source` / `content`
+- [x] **YAML** — **flat 스키마가 정본** (TASKS 2.6·3.5에서 확정): `title` / `source` / `tokens` / `meta` / `content: |` (literal block). 초기 설계의 “헤딩 중첩 맵”은 구현하지 않는다. SPEC 5.2·ARCHITECTURE [7]에 명시
 - [x] **JSON-LD** — Schema.org `Article` (`@context`, `@type`, `headline`, `url`, `articleBody`). 기존 `format=json`의 `{ title, source, content, meta }`는 변경하지 않음
 - [x] OpenAPI 압축 응답은 이번 단계에서 JSON 유지 (`format` 미적용). 파일 Bypass 307도 포맷 변환 대상 아님
 
@@ -240,7 +240,7 @@
 - [x] 잘렸을 때만 끝에 한 줄: `*(truncated to {max_tokens} tokens)*` (해당 포맷에 맞게)
 - [x] `max_tokens <= 0` 또는 미지정 → 기존처럼 무제한. 잘못된 값(NaN, 음수, 비숫자) → 0으로 취급
 - [x] 상한: 예 `max_tokens > 100000` → 400 (`code=max_tokens_too_large`)
-- [x] Pro 게이트 유지 (`maxTokens > 0` → `requiresPro`). `limits.allowSummary`에 묶지 말고 `max_tokens` 전용 조건으로 분리 (요약과 길이 제한은 다른 기능)
+- [x] 2.2 당시에는 Pro 게이트였으나 **TASKS 3.3에서 무료화** (`maxTokens > 0` 게이트 제거 — 구조화 포맷과 함께 convert 공개 무료). `limits.allowSummary`와는 분리 유지 (요약과 길이 제한은 다른 기능)
 - [x] **캐시 키**: L1 `canonicalParams`와 L2 `kvKey`에 `max_tokens`를 넣는다 (`> 0`일 때만). 넣지 않으면 서로 다른 한도가 같은 캐시를 친다
 - [x] 모듈: `src/truncateMarkdown.js` (또는 `htmlToMarkdown.js` export). 변환 파이프라인은 “마크다운 생성 → truncate → format” 순서
 
@@ -285,26 +285,26 @@
 - [x] `docs/ARCHITECTURE.md` 파이프라인 [7] 응답: markdown/json/toml/yaml/json-ld + truncate 후처리. 파일 목록에 `formatters.js` (및 truncate 모듈)
 - [x] `README.md` 쿼리 파라미터·에러 예시 동기화
 
-### 2.6 검증 (현재 작업)
+### 2.6 검증
 
-`_integration.test.mjs`에 실네트워크 없이 추가. **워킹 카피에서 2.6 테스트 블록이 빠져 있으면 먼저 복구한다.** `npm test`가 기존 1단계 케이스를 포함해 통과해야 한다.
+`_integration.test.mjs`에 실네트워크 없이 추가. **2026-09-10 워킹 카피에서 빠져 있던 2.6 테스트 블록을 커밋 `05cbc7b` 기준으로 복구·수정** (`proEnv26` 참조 버그 수정, 요청별 env 격리로 L2 KV 경쟁 제거). `npm test` 전체 통과 — `_auth` 21/21 + `_integration` 67/67.
 
-- [ ] `_integration.test.mjs`에 2.6 픽스처 파이프(mock fetch + mock Cache API) 복구
-- [ ] 기본 `GET /?url=` → `Content-Type: text/markdown`, 본문이 마크다운
-- [ ] `format=toml` (Pro) → TOML 파싱 가능, `title`/`source`/`content` 존재
-- [ ] `format=yaml` (Pro) → `title` / `source` / `content: |` 존재. (구현은 flat YAML. 2.1의 “헤딩 중첩 맵”과 다르면 SPEC/ARCHITECTURE에 **flat이 정본**이라고 명시)
-- [ ] `format=json-ld` (Pro) → `@context` / `@type` = Article
-- [ ] `format=json` (Pro) → 기존 `{ title, source, content, meta }` 유지
-- [ ] `format=xml` 등 미지원 → 400 + `unsupported_format`
-- [ ] Free + `format=toml|yaml|json-ld|json` → **현재 구현은 402.** 3.3에서 게이트를 연 뒤에는 이 항목을 200으로 바꾸고 다시 체크
-- [ ] `max_tokens=2000` (Pro): 긴 픽스처에서 `estimateTokens(body) <= 2000`, H1이 잘리지 않음, 본문 중간 `slice`가 아님
-- [ ] 동일 URL에 `max_tokens=500` vs `2000` → 캐시 키가 달라 서로 다른 본문
-- [ ] `max_tokens` 없이 요청 → 기존 전체 본문 (회귀)
-- [ ] 없는 경로 404 → TOML `[error]` + `action_recommendation` (JSON 아님)
-- [ ] `format=json` 요청의 400/404 → JSON 에러
-- [ ] 402 · `POST /v1/topup` 에러 → JSON 유지 (topup 코드는 삭제하지 않음. 그랜트 제품이 아닐 뿐)
-- [ ] 기존 Solana/Base 인증·topup·402 `networks` 테스트 회귀 없음 (Base **테스트는 유지**)
-- [ ] `npm test` 전체 PASS (`_auth.test.mjs` + `_integration.test.mjs`)
+- [x] `_integration.test.mjs`에 2.6 픽스처 파이프(mock fetch + mock Cache API) 복구
+- [x] 기본 `GET /?url=` → `Content-Type: text/markdown`, 본문이 마크다운
+- [x] `format=toml` (Pro) → TOML 파싱 가능, `title`/`source`/`content` 존재
+- [x] `format=yaml` (Pro) → `title` / `source` / `content: |` 존재. (구현은 flat YAML. SPEC/ARCHITECTURE에 **flat이 정본**이라고 명시함)
+- [x] `format=json-ld` (Pro) → `@context` / `@type` = Article
+- [x] `format=json` (Pro) → 기존 `{ title, source, content, meta }` 유지
+- [x] `format=xml` 등 미지원 → 400 + `unsupported_format`
+- [x] Free + `format=toml|yaml|json-ld|json` → **현재 구현은 402** 확인. 3.3에서 게이트를 연 뒤에는 이 항목을 200으로 바꾸고 다시 체크
+- [x] `max_tokens=2000` (Pro): 긴 픽스처에서 `estimateTokens(body) <= 2000`, H1이 잘리지 않음, 본문 중간 `slice`가 아님 (추가로 `max_tokens=200` 블록 절단 케이스도 검증)
+- [x] 동일 URL에 `max_tokens=500` vs `2000` → 캐시 키가 달라 서로 다른 본문
+- [x] `max_tokens` 없이 요청 → 기존 전체 본문 (회귀)
+- [x] 없는 경로 404 → TOML `[error]` + `action_recommendation` (JSON 아님)
+- [x] `format=json` 요청의 400/404 → JSON 에러
+- [x] 402 · `POST /v1/topup` 에러 → JSON 유지 (topup 코드는 삭제하지 않음. 그랜트 제품이 아닐 뿐)
+- [x] 기존 Solana/Base 인증·topup·402 `networks` 테스트 회귀 없음 (Base **테스트는 유지**)
+- [x] `npm test` 전체 PASS (`_auth.test.mjs` + `_integration.test.mjs`)
 
 ---
 
@@ -321,42 +321,43 @@
 
 ### 3.2 Solana-first 카피 (Base는 코드 유지)
 
-- [ ] README 핵심 특징에서 Base / 멀티체인을 내림. Solana Ed25519 + 무료 convert만 앞면
-- [ ] README 요금표($20 USDC / Lemon $19)를 내리거나 “그랜트 제품 아님”으로 접음
-- [ ] `GET /health`의 `auth`를 Solana 표기로 (예: `solana-ed25519`). Base 검증 코드는 그대로
-- [ ] 402 `networks[]`의 base 객체는 **응답에서 당장 안 빼도 됨.** 제안서·README만 Solana
+- [x] README 핵심 특징에서 Base / 멀티체인을 내리고 Solana Ed25519 + 무료 convert를 앞면으로 재구성
+- [x] README 요금표($20 USDC / Lemon $19)를 하단 **Out of grant scope** 섹션으로 접음 (“그랜트 제품 아님 — 코드는 유지”)
+- [x] `GET /health`의 `auth`를 Solana 표기로 (`solana-ed25519`). Base 검증 코드는 그대로
+- [x] 402 `networks[]`의 base 객체는 **응답에서 당장 안 빼도 됨** 명시 (제안서·README만 Solana) — 그대로 유지
 
 ### 3.3 convert 공개 무료
 
 심사자가 `format=json`을 치면 402가 나면 제안서(무료 공개재)와 모순.
 
-- [ ] `toml` / `yaml` / `json` / `json-ld` / `max_tokens`를 **지갑·크레딧 없이** 허용 (Free 게이트 해제)
-- [ ] `POST /v1/topup` · 크레딧 KV · Base 경로는 **삭제하지 않음**
-- [ ] 2.6의 “Free + format → 402” 테스트를 **200**으로 바꾸고 `npm test` PASS
+- [x] `toml` / `yaml` / `json` / `json-ld` / `max_tokens`를 **지갑·크레딧 없이** 허용 (Free 게이트 해제 — `requiresPro`는 `render`/`summary`만)
+- [x] `POST /v1/topup` · 크레딧 KV · Base 경로는 **삭제하지 않음** (테스트에도 유지 확인)
+- [x] 2.6의 “Free + format → 402” 테스트를 **200**으로 바꾸고 `npm test` PASS (Free+`max_tokens` 200 케이스도 추가)
 
 ### 3.4 발견 엔드포인트
 
 README는 `/llms.txt` · `/llms-full.txt` · `/openapi.json`을 제공한다고 하지만 워커는 404.
 
-- [ ] `GET /llms.txt` — Solana 서명 헤더, 무료 convert, MCP 예정. `text/plain`
-- [ ] `GET /llms-full.txt` — 쿼리·에러 코드
-- [ ] `GET /openapi.json` — `GET /`, `/health` (topup은 있어도 그랜트 제품으로 안 적음)
-- [ ] 인증 없이 200. 캐시 키에 넣지 않음
+- [x] `GET /llms.txt` — Solana 서명 헤더, 무료 convert, MCP 예정. `text/plain` (`src/discovery.js`)
+- [x] `GET /llms-full.txt` — 쿼리·에러 코드 + Node.js/Python 예시
+- [x] `GET /openapi.json` — `GET /`, `/health` (topup 경로는 그랜트 제품으로 안 적음)
+- [x] `GET /robots.txt` — README 약속과 일치하도록 추가 (Allow: /)
+- [x] 인증 없이 200. 캐시 키에 넣지 않음 (라우팅 직결 응답)
 
 ### 3.5 문서 구멍
 
-- [ ] `docs/ARCHITECTURE.md`에 `formatters.js`, `truncate.js`
-- [ ] YAML flat이 정본이라고 SPEC/TASKS 2.1과 맞춤
-- [ ] `AGENTS.md` “자동화 테스트 없음” → `npm test`
-- [ ] Browser Rendering은 이번 그랜트 **아님** (코드 폴백만 유지)
-- [ ] D1 INSERT 없으면 SPEC에 “미구현”
+- [x] `docs/ARCHITECTURE.md`에 `formatters.js`, `truncate.js`, `discovery.js` 파일 트리·[1] 라우팅 반영
+- [x] YAML flat이 정본이라고 SPEC(5.2)·TASKS 2.1과 맞춤
+- [x] `AGENTS.md` “자동화 테스트 없음” → `npm test` 자동 검증 설명으로 교체 + 4.2 convert 공개 무료 규칙 반영
+- [x] Browser Rendering은 이번 그랜트 **아님** (코드 폴백만 유지) — README·SPEC 로드맵에 명시
+- [x] D1 INSERT 없으면 SPEC에 “미구현” (SPEC 7 — D1은 미구현·v3.0 이후 후순위)
 
 ### 3.6 검증
 
-- [ ] 공개 레포가 브라우저에서 열림
-- [ ] `/health` · `/llms.txt` 200, auth 카피 Solana-first
-- [ ] unsigned `GET /?url=&format=json` 이 402가 아님
-- [ ] `npm test` PASS (Base 단위 테스트 포함, 삭제 아님)
+- [ ] **공개 레포가 브라우저에서 열림** — 3.1에서 사용자가 GitHub Settings로 Public 전환해야 확인 가능 (로컬에서 대신 못함)
+- [x] `/health` · `/llms.txt` 200, auth 카피 Solana-first (통합 테스트 추가: `health: auth Solana-first` · `3.4 /llms.txt`)
+- [x] unsigned `GET /?url=&format=json` 이 402가 아님 — `3.3 free+json: 200` PASS
+- [x] `npm test` PASS (21/21 + 80/80, Base 단위 테스트 포함·삭제 아님)
 
 ---
 

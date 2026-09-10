@@ -57,7 +57,7 @@
   - 배포(프로덕션): `npm run deploy` (wrangler deploy)
   - 로그 확인: `npm run tail`
   - KV 네임스페이스 관리: `npm run kv:list` / `kv:create:results` / `kv:create:apikeys`
-  - 테스트: 자동화 테스트 없음 — `npm test`는 수동 확인 안내 출력, 필요 시 `curl`로 로컬/배포본 검증
+  - 테스트: `npm test` — `node _auth.test.mjs && node _integration.test.mjs` 자동 실행 (서명/체인/포맷/에러/발견 엔드포인트). 실네트워크 없이 mock KV+RPC 사용
   - 린트/타입 체크/빌드 스크립트: 없음 (Vanilla JS 실행형 Worker이므로 별도 스크립트 없음)
 
 ---
@@ -73,7 +73,7 @@
 - `FREE_LIMITS`와 `PRO_LIMITS` 상수는 `docs/SPEC.md` (설계서 섹션 3) 기준으로 유지한다.
   - Free: `allowRender: false`, `allowSummary: false`, `allowStructured: false`, `advancedExtraction: false`
   - Pro: 위 항목 모두 `true`
-- Pro 전용 기능(`render`, `summary`, `json format`) 요청 시 권한이 없으면 **조기 차단(403)**으로 CPU를 절약한다.
+- **convert는 공개 무료** (TASKS 3.3): 구조화 포맷(`json`/`toml`/`yaml`/`json-ld`)·`max_tokens`은 지갑·크레딧 없이 200. Pro 전용은 `render`/`summary`만 — Free가 요청하면 **402 x402 응답** (CPU 절약을 위해 조기 차단)
 - Rate Limit: Free `15 RPM / 1,000 RPD`, Pro `120 RPM / 20,000 RPD`
 
 ### 4.3 바인딩 규칙

@@ -17,6 +17,7 @@ import { compressOpenApiSpec } from './openapiCompressor.js';
 import { checkRateLimit } from './rateLimit.js';
 import { serializeResponse, ALLOWED_FORMATS, escapeTomlString, escapeYamlString } from './formatters.js';
 import { truncateMarkdown } from './truncate.js';
+import { LLMS_TXT, LLMS_FULL_TXT, OPENAPI_JSON, ROBOTS_TXT } from './discovery.js';
 import {
   verifySolanaSignature,
   verifyEip191Signature,
@@ -120,9 +121,35 @@ export default {
       });
     }
 
-    // 헬스체크 엔드포인트 (JSON 유지 — TASKS 2.3)
+    // 헬스체크 엔드포인트 (JSON 유지 — TASKS 2.3, auth 카피는 Solana-first — TASKS 3.2)
     if (url.pathname === '/health') {
-      return jsonResponse({ status: 'ok', version: '2.1', auth: 'solana-ed25519+base-eip191' }, 200);
+      return jsonResponse({ status: 'ok', version: '2.1', auth: 'solana-ed25519' }, 200);
+    }
+
+    // ─── AI 발견 엔드포인트 (인증 불필요 200 · 캐시 키 미사용 — TASKS 3.4) ──────
+    if (url.pathname === '/llms.txt') {
+      return new Response(LLMS_TXT, {
+        status: 200,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'text/plain; charset=utf-8' },
+      });
+    }
+    if (url.pathname === '/llms-full.txt') {
+      return new Response(LLMS_FULL_TXT, {
+        status: 200,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'text/plain; charset=utf-8' },
+      });
+    }
+    if (url.pathname === '/openapi.json') {
+      return new Response(OPENAPI_JSON, {
+        status: 200,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json; charset=utf-8' },
+      });
+    }
+    if (url.pathname === '/robots.txt') {
+      return new Response(ROBOTS_TXT, {
+        status: 200,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'text/plain; charset=utf-8' },
+      });
     }
 
     // 루트 경로: 간단한 안내 (LLM-readable 에러 — TASKS 2.3)
@@ -204,9 +231,20 @@ export default {
       });
     }
 
+    // ─── 2-c. max_tokens 상한 검증 (TASKS 2.2: > 100000 → 400) ──────────────
+    if (maxTokens > 100000) {
+      return errorResponse(request, {
+        status: 400,
+        code: 'max_tokens_too_large',
+        message: 'max_tokens exceeds the limit of 100000',
+        action_recommendation: 'Use max_tokens <= 100000 or omit it for unlimited output',
+      });
+    }
+
     // ─── 3. 기능 권한 및 x402 결제 체크 ────────────────────────────────────
-    const structured = ['json', 'toml', 'yaml', 'json-ld'].includes(format);
-    const requiresPro = forceRender || mode === 'summary' || structured || maxTokens > 0;
+    // TASKS 3.3: 구조화 포맷(toml/yaml/json/json-ld)·max_tokens은 무료 convert로
+    // 지갑·크레딧 없이 허용 (Free 게이트 해제). Pro 전용은 render/summary만 유지.
+    const requiresPro = forceRender || mode === 'summary';
     if (requiresPro && planInfo.plan === 'free') {
       return x402PaymentRequiredResponse(env, 'This feature requires payment via x402 or a Pro API Key.');
     }
@@ -471,8 +509,7 @@ export default {
         markdown = `# Summary\n\n${markdown.slice(0, 1500)}...\n\n*(Summary mode — upgrade to Pro for full AI summarization)*`;
       }
 
-      // max_tokens (Pro) — 마크다운 블록 스코어링 기반 압축 (TASKS 2.2)
-      // requiresPro로 max_tokens>0은 Pro만 통과하므로 여기선 조건만으로 충분
+      // max_tokens — 마크다운 블록 스코어링 기반 압축 (TASKS 2.2, 3.3에서 무료화)
       if (maxTokens > 0) {
         markdown = truncateMarkdown(markdown, maxTokens);
       }

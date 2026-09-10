@@ -127,7 +127,7 @@ const now = Math.floor(Date.now() / 1000);
   const env = makeEnv();
   const res = await worker.fetch(new Request('http://localhost/health'), env, {});
   const data = await res.json();
-  check('health: auth multi-chain', data.auth === 'solana-ed25519+base-eip191', data.auth);
+  check('health: auth Solana-first', data.auth === 'solana-ed25519', data.auth);
   check('health: version', data.version === '2.1');
 }
 
@@ -384,6 +384,217 @@ const now = Math.floor(Date.now() / 1000);
   check('402: networks�� solana ����', data.networks.some(n => n.network === 'solana'));
   const prHeader = res.headers.get('PAYMENT-REQUIRED');
   check('402: PAYMENT-REQUIRED ����� networks ����', !!prHeader && JSON.parse(prHeader).networks.length >= 2);
+}
+
+// ============ TASKS 2.6: AI Agent 응답 포맷 · max_tokens · LLM 에러 ============
+// mock fetch(HTML) + mock Cache API만 사용. 실네트워크 없음, npm test에 포함.
+{
+  const cacheMap = new Map();
+  const origCaches = globalThis.caches;
+  const origFetch = globalThis.fetch;
+  const htmlBase =
+    '<html><head><title>Fixture</title></head><body><h1>Fixture Title</h1>' +
+    Array.from({ length: 60 }, (_, i) => `<p>Paragraph ${i} lorem ipsum dolor sit amet consectetur.</p>`).join('') +
+    '</body></html>';
+  const PRO_KEY = 'aznp_pro_test00000000000000';
+
+  // 요청마다 새 env를 만든다. worker가 ctx.waitUntil로 넘긴 IIFE(캐시/KV 저장)는
+  // 동기 실행이라 요청 간 공유 KV/env는 다음 요청 결과를 오염시킬 수 있음 (프로덕션은
+  // Cloudflare가 waitUntil 수명을 관리하지만 테스트는 요청별 격리가 필요).
+  async function runPipe(query, { env = null, apiKey = '', html = htmlBase, path = '/' } = {}) {
+    env = env || (apiKey
+      ? makeEnv({ apiKeys: { [apiKey]: JSON.stringify({ userId: 'u1', plan: 'pro', status: 'active' }) } })
+      : makeEnv());
+    globalThis.caches = {
+      default: {
+        match: async (k) => cacheMap.get(typeof k === 'string' ? k : k.url) || null,
+        put: async (k, res) => {
+          try {
+            cacheMap.set(typeof k === 'string' ? k : k.url, {
+              status: res.status,
+              body: await res.clone().text(),
+              contentType: res.headers.get('Content-Type'),
+            });
+          } catch { /* ignore */ }
+        },
+      },
+    };
+    globalThis.fetch = async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'text/html; charset=utf-8' }),
+      text: async () => html,
+      json: async () => ({}),
+    });
+    const qs = new URLSearchParams(query);
+    const headers = apiKey ? { 'X-API-Key': apiKey } : {};
+    try {
+      return await worker.fetch(new Request(`http://localhost${path}?${qs}`, { headers }), env, { waitUntil() {} });
+    } finally {
+      globalThis.fetch = origFetch;
+      globalThis.caches = origCaches;
+      cacheMap.clear();
+    }
+  }
+
+  // 1) 기본 GET → text/markdown (Free)
+  {
+    const res = await runPipe({ url: 'https://example.com/post' });
+    const body = await res.text();
+    check('2.6 GET: 200 + text/markdown', res.status === 200 && (res.headers.get('content-type') || '').includes('text/markdown'));
+    check('2.6 GET: markdown 본문 (H1 + Source 포함)', body.includes('Fixture Title') && body.includes('*Source: https://example.com/post*'));
+  }
+
+  // 2) format=toml (Pro) — title/source/content 존재
+  {
+    const res = await runPipe({ url: 'https://example.com/post', format: 'toml' }, { apiKey: PRO_KEY });
+    const body = await res.text();
+    check('2.6 toml: 200 + application/toml', res.status === 200 && (res.headers.get('content-type') || '').includes('application/toml'));
+    check('2.6 toml: title/source/content', body.includes('title = "Fixture"') && body.includes('source = "https://example.com/post"') && body.includes('content = """'));
+    check('2.6 toml: [meta] plan pro', body.includes('[meta]') && body.includes('plan = "pro"'));
+  }
+
+  // 3) format=yaml (Pro) — flat 스키마가 정본 (TASKS 2.6)
+  {
+    const res = await runPipe({ url: 'https://example.com/post', format: 'yaml' }, { apiKey: PRO_KEY });
+    const body = await res.text();
+    check('2.6 yaml: 200 + application/yaml', res.status === 200 && (res.headers.get('content-type') || '').includes('application/yaml'));
+    check('2.6 yaml: title/source + literal block(content: |)', body.includes('title: "Fixture"') && body.includes('source: "https://example.com/post"') && body.includes('content: |'));
+  }
+
+  // 4) format=json-ld (Pro) — @context / @type = Article
+  {
+    const res = await runPipe({ url: 'https://example.com/post', format: 'json-ld' }, { apiKey: PRO_KEY });
+    const data = JSON.parse(await res.text());
+    check('2.6 json-ld: @type Article', data['@type'] === 'Article' && data['@context'] === 'https://schema.org');
+    check('2.6 json-ld: url/headline', data.url === 'https://example.com/post' && !!data.headline);
+  }
+
+  // 5) format=json (Pro) — 기존 { title, source, content, meta } 하위 호환
+  {
+    const res = await runPipe({ url: 'https://example.com/post', format: 'json' }, { apiKey: PRO_KEY });
+    const data = await res.json();
+    check('2.6 json: title/source/content', !!data.title && data.source === 'https://example.com/post' && !!data.content);
+    check('2.6 json: meta.plan pro', data.meta && data.meta.plan === 'pro');
+  }
+
+  // 6) format=xml 등 미지원 → 400 unsupported_format (기본 TOML 에러)
+  {
+    const res = await runPipe({ url: 'https://example.com/post', format: 'xml' });
+    const body = await res.text();
+    check('2.6 unsupported: 400 + code', res.status === 400 && body.includes('unsupported_format') && body.includes('action_recommendation'));
+    check('2.6 unsupported: 기본 TOML(JSON 아님)', !body.trim().startsWith('{'));
+  }
+
+  // 7) Free + 구조화 포맷 → 200 (TASKS 3.3 convert 무료화: 402 아님)
+  {
+    const contentTypes = { json: 'application/json', toml: 'application/toml', yaml: 'application/yaml', 'json-ld': 'application/ld+json' };
+    for (const fmt of ['json', 'toml', 'yaml', 'json-ld']) {
+      const res = await runPipe({ url: 'https://example.com/post', format: fmt });
+      const body = await res.text();
+      check(`3.3 free+${fmt}: 200 + ${contentTypes[fmt]}`, res.status === 200 && (res.headers.get('content-type') || '').includes(contentTypes[fmt]));
+      check(`3.3 free+${fmt}: 본문 존재(402 아님)`, body.length > 50 && !res.headers.has('PAYMENT-REQUIRED'));
+    }
+  }
+
+  // 8) 없는 경로 → 404 TOML [error] + action_recommendation (JSON 아님)
+  {
+    const res = await runPipe({}, { path: '/nonexistent' });
+    const body = await res.text();
+    check('2.6 404: TOML [error] + action_recommendation', res.status === 404 && body.includes('[error]') && body.includes('action_recommendation') && !body.trim().startsWith('{'));
+  }
+
+  // 9) format=json 요청의 400/404 → JSON 에러
+  {
+    const res = await runPipe({ format: 'json' }, { path: '/nonexistent' });
+    const body = await res.text();
+    let j = null; try { j = JSON.parse(body); } catch { /* */ }
+    check('2.6 404+format=json: JSON error.code', res.status === 404 && j && j.error && j.error.code === 'not_found');
+  }
+  {
+    const res = await runPipe({ format: 'json' });
+    const body = await res.text();
+    let j = null; try { j = JSON.parse(body); } catch { /* */ }
+    check('2.6 400+format=json: JSON error.code', res.status === 400 && j && j.error && j.error.code === 'missing_url');
+  }
+
+  // 10) max_tokens=2000 (Pro): 긴 픽스처에서 est<=2000, H1 유지, 전체 본문 미절단
+  {
+    const res = await runPipe({ url: 'https://example.com/long', max_tokens: '2000' }, { apiKey: PRO_KEY });
+    const body = await res.text();
+    const est = Math.ceil(body.length / 4);
+    check('2.6 max_tokens=2000: est <= 2000', est <= 2000, 'est=' + est);
+    check('2.6 max_tokens=2000: H1 유지', body.includes('# Fixture'));
+    check('2.6 max_tokens=2000: 전체 본문 유지(미절단)', body.includes('Paragraph 59'));
+  }
+
+  // 10-b) max_tokens=200 (Pro): 블록 단위 절단, H1 유지, 문장 중간 slice 아님
+  {
+    const res = await runPipe({ url: 'https://example.com/long', max_tokens: '200' }, { apiKey: PRO_KEY });
+    const body = await res.text();
+    const est = Math.ceil(body.length / 4);
+    check('2.6 max_tokens=200: est <= 200', est <= 200, 'est=' + est);
+    check('2.6 max_tokens=200: 절단 마커 존재', body.includes('truncated by max_tokens'));
+    check('2.6 max_tokens=200: H1 첫 블록 유지', body.startsWith('# Fixture'));
+    const core = body.split('... (truncated by max_tokens)')[0];
+    check('2.6 max_tokens=200: 문장 중간 slice 아님', core.trimEnd().split('\n').pop().endsWith('.'));
+  }
+
+  // 11) 동일 URL에 max_tokens=500 vs 2000 → 캐시 키 분리로 서로 다른 본문
+  {
+    const b1 = (await (await runPipe({ url: 'https://example.com/dist', max_tokens: '500' }, { apiKey: PRO_KEY })).text()).length;
+    const b2 = (await (await runPipe({ url: 'https://example.com/dist', max_tokens: '2000' }, { apiKey: PRO_KEY })).text()).length;
+    check('2.6 max_tokens: 500 vs 2000 서로 다른 본문', b1 !== b2, 'b1=' + b1 + ' b2=' + b2);
+  }
+
+  // 12) max_tokens 없이 요청 → 기존 전체 본문 (회귀)
+  {
+    const res = await runPipe({ url: 'https://example.com/post' });
+    const body = await res.text();
+    check('2.6 max_tokens 미지정: 전체 본문(Paragraph 59 존재)', body.includes('Paragraph 59'));
+  }
+
+  // 13) Free + max_tokens → 200 (TASKS 3.3 무료화, truncate 동작)
+  {
+    const res = await runPipe({ url: 'https://example.com/long', max_tokens: '200' });
+    const body = await res.text();
+    check('3.3 free+max_tokens: 200(402 아님)', res.status === 200 && !res.headers.has('PAYMENT-REQUIRED'));
+    check('3.3 free+max_tokens: truncate 적용', Math.ceil(body.length / 4) <= 200 && body.includes('truncated by max_tokens'));
+  }
+
+  // 14) max_tokens > 100000 → 400 max_tokens_too_large (TASKS 2.2)
+  {
+    const res = await runPipe({ url: 'https://example.com/long', max_tokens: '200000' });
+    const body = await res.text();
+    check('2.2 max_tokens 상한: 400 + code', res.status === 400 && body.includes('max_tokens_too_large') && body.includes('action_recommendation'));
+  }
+}
+
+// ============ TASKS 3.4: 발견 엔드포인트 (인증 불필요 200 · 캐시 키 미사용) ============
+{
+  const res = await worker.fetch(new Request('http://localhost/llms.txt'), makeEnv(), {});
+  const body = await res.text();
+  check('3.4 /llms.txt: 200 + text/plain', res.status === 200 && (res.headers.get('content-type') || '').includes('text/plain'));
+  check('3.4 /llms.txt: Solana-first 카피', body.includes('Solana') && body.includes('free') && body.includes('x-signature'));
+}
+
+{
+  const res = await worker.fetch(new Request('http://localhost/llms-full.txt'), makeEnv(), {});
+  const body = await res.text();
+  check('3.4 /llms-full.txt: 200 + 쿼리/에러 코드 포함', res.status === 200 && body.includes('max_tokens') && body.includes('fetch_failed'));
+}
+
+{
+  const res = await worker.fetch(new Request('http://localhost/openapi.json'), makeEnv(), {});
+  const data = await res.json();
+  check('3.4 /openapi.json: 200 + openapi 3.0.3', res.status === 200 && data.openapi === '3.0.3');
+  check('3.4 /openapi.json: GET / + /health 경로', !!data.paths['/']?.get && !!data.paths['/health']?.get);
+  check('3.4 /openapi.json: topup 미표기(그랜트 제품 아님)', !JSON.stringify(data).includes('/v1/topup'));
+}
+
+{
+  const res = await worker.fetch(new Request('http://localhost/robots.txt'), makeEnv(), {});
+  check('3.4 /robots.txt: 200 + text/plain', res.status === 200 && (res.headers.get('content-type') || '').includes('text/plain'));
 }
 
 // ===========
