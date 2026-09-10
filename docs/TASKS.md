@@ -363,12 +363,12 @@ README는 `/llms.txt` · `/llms-full.txt` · `/openapi.json`을 제공한다고 
 
 ## 4단계: Superteam 제안서 $10k (지급 아님)
 
-**목표**: [Superteam Grants](https://earn.superteam.fun/grants/) 제출문. Foundation $20k 초안(`docs/AZNP_Solana_Foundation_Grant_Proposal.docx`)은 재료로만 쓰고 **금액을 $10k로 다시 씀.**
+**목표**: [Superteam Grants](https://earn.superteam.fun/grants/) 제출문. 금액은 **$10k**.
 3단계와 병행 가능. 제출은 3.1 레포 Public 이후.
 
 ### 4.1 Why Solana (제안서 한가운데)
 
-- [x] 초안: 키페어 신원 + Eliza / Agent Kit. 크레딧 아님 (`_build_grant_proposal.mjs`)
+- [x] 초안: 키페어 신원 + Eliza / Agent Kit. 크레딧 아님
 - [ ] Superteam용 짧은 버전으로 옮김 (1페이지 Why Solana)
 - [ ] 차별 한 표: Agent Kit MCP, Foundation `pay`, Cloudflare Markdown, Jina — AZNP는 **무료 convert + Solana 키페어 신원 + Eliza/Kit 플러그인**
 - [ ] Base / 유료 크레딧 / Lemon을 제안서에 안 씀 (코드 삭제가 아님)
