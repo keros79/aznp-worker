@@ -12,7 +12,7 @@
 1. **`docs/SPEC.md`**: 기능 사양 및 프로젝트 목표
    - 프로젝트의 비전, 핵심 요구사항, 유저 스토리 및 비기능적 요구사항이 정의되어 있습니다.
    - 새로운 기능을 구현하거나 기존 기능을 변경할 때 목표에 부합하는지 반드시 확인하세요.
-ㄴ
+
 2. **`docs/ARCHITECTURE.md`**: 파일/디렉터리 구조 및 클래스 설계
    - 시스템 아키텍처, 디렉터리 레이아웃, 모듈 간 의존성, 클래스 및 데이터 모델 구조가 정의되어 있습니다.
    - 코드 작성 시 정의된 계층(Layer)과 네이밍 컨벤션을 이탈하지 마세요.
@@ -21,7 +21,7 @@
    - 작업의 순서 및 마일스톤별 세부 체크리스트입니다.
    - 작업 착수 시 현재 진행 중인 단계의 작업 항목을 확인하고, 완료 후 체크리스트 상태를 업데이트하세요.
 
----ㄴ
+---
 
 ## 2. 에이전트 행동 지침 및 작업 흐름 (Workflow Rules)
 
@@ -47,7 +47,8 @@
 - **Language**: JavaScript (ESM, `"type": "module"`) — 진입점 `src/worker.js`
 - **Package Manager**: npm (`package-lock.json`)
 - **주요 의존성**:
-  - 런타임: `bs58`, `tweetnacl` (Solana Ed25519 서명 검증 / Base58 인코딩)
+  - 런타임 (Solana): `bs58`, `tweetnacl` (Ed25519 서명 검증 / Base58 인코딩)
+  - 런타임 (Base EVM): `@noble/hashes` (keccak256), `@noble/secp256k1` (경량 ecrecover, CF Workers 호환)
   - 개발: `wrangler` (로컬 개발·배포)
 - **Cloudflare 인프라 바인딩**: `RESULTS_KV`, `API_KEYS` (KV), `DB` (D1), `BROWSER` (Browser Rendering) → `wrangler.toml` 참조
 - **주요 실행 명령**:
@@ -61,9 +62,43 @@
 
 ---
 
-## 4. 제약 사항 및 주의사항 (Guardrails)
+## 4. 프로젝트 개발 규칙 (Development Rules)
+
+### 4.1 아키텍처 규칙
+- **다층 캐시 순서를 반드시 유지한다**: Cache API (L1) → KV (L2) → 실제 변환 (L3)
+- 캐시 히트 시 즉시 반환하고, 불필요한 변환은 절대 실행하지 않는다.
+- Tier 변환 우선순위를 유지한다: **Tier 1 (CF Native) → Tier 2 (자체 변환) → Tier 3 (Browser Rendering)**
+
+### 4.2 플랜 권한 규칙
+- `FREE_LIMITS`와 `PRO_LIMITS` 상수는 `docs/SPEC.md` (설계서 섹션 3) 기준으로 유지한다.
+  - Free: `allowRender: false`, `allowSummary: false`, `allowStructured: false`, `advancedExtraction: false`
+  - Pro: 위 항목 모두 `true`
+- Pro 전용 기능(`render`, `summary`, `json format`) 요청 시 권한이 없으면 **조기 차단(403)**으로 CPU를 절약한다.
+- Rate Limit: Free `15 RPM / 1,000 RPD`, Pro `120 RPM / 20,000 RPD`
+
+### 4.3 바인딩 규칙
+| 바인딩 | 타입 | 설명 |
+|-------------|------|------|
+| `API_KEYS` | KV Namespace | Pro API Key 인증 |
+| `RESULTS_KV` | KV Namespace | L2 변환 결과 캐시 |
+| `DB` | D1 Database | Pro 사용량·토큰 통계 |
+| `BROWSER` | Browser Rendering | Tier 3 (Pro 전용) |
+
+### 4.4 개발 시 확인 사항
+- 새 기능 추가 전 **로드맵(`docs/SPEC.md` 섹션 10)**과 일치 여부를 확인한다.
+- D1 통계 기록은 `ctx.waitUntil()`로 비동기 처리하여 응답 지연 없이 동작해야 한다.
+- API Key 형식: `aznp_pro_<random_32_chars>`
+- 결제 연동은 **Stripe / Lemon Squeezy Webhook → KV 상태 업데이트** 방식으로 한다.
+
+---
+
+## 5. 제약 사항 및 주의사항 (Guardrails)
 
 - `docs/SPEC.md`에 정의되지 않은 스펙을 독단적으로 추가하거나 변경하지 마세요. 스펙 변경이 필요하다고 판단되면 사용자에게 먼저 제안하세요.
 - `docs/ARCHITECTURE.md`에 정의된 파일/디렉터리 레이아웃 규칙을 무시하고 임의 위치에 파일을 생성하지 마세요.
 - `docs/TASKS.md`에서 이전 단계가 완결되지 않은 상태로 다음 단계 작업을 무단 진행하지 마세요.
+- **`npx wrangler deploy` 등의 배포 명령어는 자동 실행하지 않는다.** (사용자가 명시적으로 "배포" 또는 "deploy"를 요청/승인했을 때만 진행)
+- **다중 Cloudflare 무료 계정 운영은 절대 권장하지 않는다** (ToS 위반 + 운영 복잡도).
+- 트래픽 증가 시 Workers Paid ($5/월) 전환을 권장한다.
+- `forceFresh` 없이 캐시를 우회하는 로직을 추가하지 않는다.
 - 환경변수 및 비밀 키(API Key 등)가 코드에 하드코딩되지 않도록 항상 `.env` 설정을 유지하세요.

@@ -15,8 +15,16 @@
 import { convertToCleanMarkdown, estimateTokens, estimateOriginalTokens } from './htmlToMarkdown.js';
 import { compressOpenApiSpec } from './openapiCompressor.js';
 import { checkRateLimit } from './rateLimit.js';
-import nacl from 'tweetnacl';
-import bs58 from 'bs58';
+import {
+  verifySolanaSignature,
+  verifyEip191Signature,
+  verifyEip712Signature,
+  resolveChain,
+  isBaseAddress,
+  isBaseTxHash,
+  normalizeBaseAddress,
+  transferEventTopic0,
+} from './walletAuth.js';
 
 // ─── 플랜 설정 ────────────────────────────────────────────────────────────────
 
@@ -49,10 +57,16 @@ const UPGRADE_URL = 'https://aznp.pages.dev/pricing';
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'X-API-Key, Content-Type, x-wallet-address, x-signature, x-timestamp, PAYMENT-SIGNATURE, X-PAYMENT',
+  'Access-Control-Allow-Headers': 'X-API-Key, Content-Type, x-wallet-address, x-signature, x-timestamp, x-chain, x-sig-type, PAYMENT-SIGNATURE, X-PAYMENT',
   'Access-Control-Expose-Headers':
     'X-AZNP-Plan, X-AZNP-Source, X-AZNP-Cache, X-Token-Reduction, X-Markdown-Tokens, X-Original-Tokens, X-RateLimit-Remaining, X-RateLimit-Reset, PAYMENT-REQUIRED',
 };
+
+// ─── 온체인 결제 공통 상수 ─────────────────────────────────────────────────────
+const MIN_DEPOSIT_USDC = 20;
+const BASE_USDC_DECIMALS = 1e6;           // Base native USDC (6 decimals)
+// ERC-20 Transfer(address,address,uint256) topic0 (walletAuth에서 계산)
+const BASE_TRANSFER_EVENT_TOPIC0 = transferEventTopic0();
 
 // ─── Bypass 대상 MIME 타입 프리픽스 ─────────────────────────────────────────────
 // 아래 타입은 HTML 변환 없이 원본 응답을 그대로 투명 프록시(bypass) 처리합니다.
@@ -101,7 +115,7 @@ export default {
 
     // 헬스체크 엔드포인트
     if (url.pathname === '/health') {
-      return jsonResponse({ status: 'ok', version: '2.1', auth: 'solana-wallet-stateless' }, 200);
+      return jsonResponse({ status: 'ok', version: '2.1', auth: 'solana-ed25519+base-eip191' }, 200);
     }
 
     // 루트 경로: 간단한 안내
@@ -152,6 +166,11 @@ export default {
     // ─── 2. 플랜 확인 (KV) ────────────────────────────────────────────────────
     const planInfo = await getPlan(request, env);
     const limits = planInfo.limits;
+
+    // x-chain 헤더와 지갑 주소 형식 모순 → 400 (TASKS 1.2)
+    if (planInfo.plan === 'chain_mismatch') {
+      return jsonResponse({ error: planInfo.error }, 400);
+    }
 
     // ─── 3. 기능 권한 및 x402 결제 체크 ────────────────────────────────────
     const requiresPro = forceRender || mode === 'summary' || format === 'json' || maxTokens > 0;
@@ -494,16 +513,197 @@ export default {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * [Route 1] 온체인 Solana USDC 충전 핸들러 (POST /v1/topup)
+ * [Route 1-b] Base (EVM L2) native USDC 충전 처리
+ * - native USDC `Transfer` 이벤트만 채택, USDbC 등 다른 ERC-20은 거부 (가이드 섹션 4.4)
+ * - 중복 키: `tx:base:{tx_hash}` (TTL 30일), 크레딧 키: `acc:base:{walletLower}:count`
+ */
+async function handleBaseTopup(env, { wallet, tx_hash }) {
+  const kvStore = env.RESULTS_KV || env.API_KEYS;
+  if (!kvStore) {
+    return jsonResponse({ error: 'KV binding (RESULTS_KV) is not configured' }, 500);
+  }
+
+  // ① 수신 EOA 미설정 → 500 (모호한 수신 주소로 크레딧 지급 금지, TASKS 1.5)
+  const serviceWallet = (env.BASE_SERVICE_WALLET_ADDRESS || '').toLowerCase();
+  const usdcAddress = (env.BASE_USDC_ADDRESS || '').toLowerCase();
+  const chainId = Number(env.BASE_CHAIN_ID || 8453);
+
+  if (!/^0x[0-9a-f]{40}$/.test(serviceWallet)) {
+    return jsonResponse({ error: 'BASE_SERVICE_WALLET_ADDRESS is not configured' }, 500);
+  }
+
+  // ② 트랜잭션 중복 처리 검증
+  const txKey = `tx:base:${tx_hash}`;
+  const txProcessed = await kvStore.get(txKey);
+  if (txProcessed) {
+    return jsonResponse({ error: 'Transaction already processed' }, 400);
+  }
+
+  // ③ Base RPC receipt 조회 (실패 시 eth_getTransactionByHash로 chainId/상태 보강)
+  let receipt;
+  try {
+    receipt = await callBaseRpc(env, 'eth_getTransactionReceipt', [tx_hash]);
+  } catch (rpcErr) {
+    return jsonResponse({ error: `Base RPC error: ${rpcErr.message}` }, 502);
+  }
+
+  if (!receipt) {
+    try {
+      const txInfo = await callBaseRpc(env, 'eth_getTransactionByHash', [tx_hash]);
+      if (!txInfo) {
+        return jsonResponse({ error: 'Invalid or failed transaction hash on Base blockchain' }, 400);
+      }
+      if (txInfo.chainId && Number(txInfo.chainId) !== chainId) {
+        return jsonResponse({
+          error: `Transaction is on chain ${txInfo.chainId}, expected ${chainId}`,
+        }, 400);
+      }
+      return jsonResponse({ error: 'Transaction receipt not found (pending or reorged)' }, 400);
+    } catch (rpcErr) {
+      return jsonResponse({ error: `Base RPC error: ${rpcErr.message}` }, 502);
+    }
+  }
+
+  // ④ receipt 성공 상태 확인 (status == 0x1)
+  const status = receipt.status ? Number(receipt.status) : 0;
+  if (status !== 1) {
+    return jsonResponse({
+      error: 'Transaction did not succeed on Base blockchain (status != 0x1)',
+    }, 400);
+  }
+
+  // ⑤ native USDC Transfer 로그 탐색
+  //   topic0 == keccak256("Transfer(address,address,uint256)")
+  //   emitter == BASE_USDC_ADDRESS, from == 요청 wallet, to == 서비스 지갑
+  let amountUSDC = 0;
+  let found = false;
+  const logs = receipt.logs || [];
+  for (const log of logs) {
+    if (!log || !Array.isArray(log.topics) || log.topics.length < 3) continue;
+
+    if ((log.topics[0] || '').toLowerCase() !== BASE_TRANSFER_EVENT_TOPIC0) continue;
+    if ((log.address || '').toLowerCase() !== usdcAddress) continue;
+
+    const from = String(log.topics[1] || '').toLowerCase();
+    const to = String(log.topics[2] || '').toLowerCase();
+    if (from !== wallet || to !== serviceWallet) continue;
+
+    const data = String(log.data || '').toLowerCase();
+    if (!/^0x[0-9a-f]+$/.test(data)) continue;
+    amountUSDC = Number(BigInt(data)) / BASE_USDC_DECIMALS;
+    found = true;
+    break;
+  }
+
+  if (!found) {
+    return jsonResponse({
+      error: 'native USDC Transfer not found',
+      reason: 'Only native USDC Transfer to the service wallet is accepted. Bridged USDbC or other ERC-20 transfers are rejected.',
+    }, 400);
+  }
+
+  // ⑥ 최소 $20 USDC 입금 검증
+  if (amountUSDC < MIN_DEPOSIT_USDC) {
+    return jsonResponse({
+      error: 'Minimum deposit requirement is $20 USDC',
+      received_usdc: amountUSDC,
+      min_required: MIN_DEPOSIT_USDC,
+      tiers: {
+        'Pro Agent': '$20 USDC = 12,000 requests',
+        'Enterprise': '$100 USDC = 80,000 requests'
+      }
+    }, 400);
+  }
+
+  // ⑦ 크레딧 계산 (기존 Solana 산식과 동일: >= $100 → ×800, 그 외 ×600)
+  let addedCredits = 0;
+  if (amountUSDC >= 100) {
+    addedCredits = Math.floor(amountUSDC * 800); // Enterprise Tier
+  } else {
+    addedCredits = Math.floor(amountUSDC * 600); // Pro Agent Tier
+  }
+
+  // ⑧ KV 중복 마킹 (30일 TTL) 및 크레딧 적립
+  await kvStore.put(txKey, 'processed', { expirationTtl: 2592000 });
+
+  const currentCount = parseInt((await kvStore.get(`acc:base:${wallet}:count`)) || '0', 10);
+  const newCount = currentCount + addedCredits;
+  await kvStore.put(`acc:base:${wallet}:count`, newCount.toString());
+
+  return jsonResponse({
+    success: true,
+    chain: 'base',
+    wallet,
+    deposited_usdc: amountUSDC,
+    added_credits: addedCredits,
+    total_allowed_requests: newCount,
+    remaining_count: newCount
+  }, 200);
+}
+
+/**
+ * Base RPC JSON-RPC 호출 헬퍼
+ */
+async function callBaseRpc(env, method, params) {
+  const rpcUrl = env.BASE_RPC_URL || 'https://mainnet.base.org';
+  const rpcRes = await fetch(rpcUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+  });
+  const rpcData = await rpcRes.json();
+  if (rpcData && rpcData.error) {
+    throw new Error(rpcData.error.message || JSON.stringify(rpcData.error));
+  }
+  return rpcData ? rpcData.result : null;
+}
+
+/**
+ * [Route 1] 온체인 USDC 충전 핸들러 (POST /v1/topup)
+ * - body `chain` 생략 시: EVM 형식(wallet/tx_hash)이면 `base`, 그 외 `solana` (기존 하위 호환)
  */
 async function handleTopup(request, env) {
   try {
-    const { wallet, tx_hash } = await request.json();
+    let body = {};
+    try {
+      body = await request.json();
+    } catch (e) {
+      body = {};
+    }
 
+    const { wallet, tx_hash } = body;
     if (!wallet || !tx_hash) {
       return jsonResponse({ error: 'wallet and tx_hash parameters are required' }, 400);
     }
 
+    // ─── 체인 결정 (TASKS 1.5) ───
+    const isEvmWallet = isBaseAddress(wallet);
+    const isEvmTx = isBaseTxHash(tx_hash);
+    let chain = typeof body.chain === 'string' ? body.chain.trim().toLowerCase() : '';
+
+    if (!chain) {
+      chain = isEvmWallet || isEvmTx ? 'base' : 'solana';
+    }
+    if (chain !== 'solana' && chain !== 'base') {
+      return jsonResponse({ error: "chain must be 'solana' or 'base'" }, 400);
+    }
+    if (chain === 'solana' && isEvmWallet) {
+      return jsonResponse({ error: "chain 'solana' does not match 0x EVM wallet format" }, 400);
+    }
+    if (chain === 'base') {
+      if (!isEvmWallet) {
+        return jsonResponse({ error: "chain 'base' requires a 0x EVM wallet address" }, 400);
+      }
+      if (!isEvmTx) {
+        return jsonResponse({ error: "chain 'base' requires a 0x + 64 hex transaction hash" }, 400);
+      }
+      return handleBaseTopup(env, {
+        wallet: normalizeBaseAddress(wallet),
+        tx_hash: '0x' + tx_hash.slice(2).toLowerCase(),
+      });
+    }
+
+    // ─── Solana 경로 (기존 동작 유지) ───
     const kvStore = env.RESULTS_KV || env.API_KEYS;
     if (!kvStore) {
       return jsonResponse({ error: 'KV binding (RESULTS_KV) is not configured' }, 500);
@@ -553,11 +753,11 @@ async function handleTopup(request, env) {
     const amountUSDC = postAmount - preAmount;
 
     // ④ 최소 $20 USDC 입금 검증
-    if (amountUSDC < 20) {
+    if (amountUSDC < MIN_DEPOSIT_USDC) {
       return jsonResponse({
         error: 'Minimum deposit requirement is $20 USDC',
         received_usdc: amountUSDC,
-        min_required: 20,
+        min_required: MIN_DEPOSIT_USDC,
         tiers: {
           'Pro Agent': '$20 USDC = 12,000 requests',
           'Enterprise': '$100 USDC = 80,000 requests'
@@ -589,6 +789,7 @@ async function handleTopup(request, env) {
 
     return jsonResponse({
       success: true,
+      chain: 'solana',
       wallet,
       deposited_usdc: amountUSDC,
       added_credits: addedCredits,
@@ -602,12 +803,25 @@ async function handleTopup(request, env) {
 }
 
 /**
- * 플랜 확인 (Solana Wallet Stateless Auth 우선 -> Pro API Key 차선)
+ * 플랜 확인 (멀티체인 지갑 인증 우선 -> Pro API Key 차선 -> Free)
+ * - Solana: Ed25519 (`x402:{timestamp}`) — 기존 경로 유지
+ * - Base: EIP-191 (`x402:base:{timestamp}`) / EIP-712 (가이드 섹션 4.3) — TASKS 1.4
  */
 async function getPlan(request, env) {
   const kvStore = env.RESULTS_KV || env.API_KEYS;
 
-  // ─── 1. Solana Wallet Ed25519 무키 서명 인증 ───
+  // ─── 0. 체인 식별 (TASKS 1.2) ───
+  const resolver = resolveChain({
+    declared: request.headers.get('x-chain'),
+    address: request.headers.get('x-wallet-address'),
+  });
+  if (resolver.error) {
+    // x-chain 헤더와 주소 형식 모순 → 400
+    return { plan: 'chain_mismatch', limits: FREE_LIMITS, error: resolver.error };
+  }
+  const chain = resolver.chain;
+
+  // ─── 1. 지갑 서명 인증 (지갑 주소 = 계정 ID) ───
   const wallet = request.headers.get('x-wallet-address');
   const signature = request.headers.get('x-signature');
   const timestamp = request.headers.get('x-timestamp');
@@ -616,39 +830,82 @@ async function getPlan(request, env) {
     const now = Math.floor(Date.now() / 1000);
     const reqTime = parseInt(timestamp, 10);
 
-    // 타임스탬프 5분 이내 검증 (리플레이 방지)
+    // 타임스탬프 ±300초 창 (체인 공통, 리플레이 방지)
     if (isNaN(reqTime) || Math.abs(now - reqTime) > 300) {
       return { plan: 'invalid_timestamp', limits: FREE_LIMITS };
     }
 
-    // Ed25519 서명 검증 ("x402:{timestamp}")
-    const message = `x402:${timestamp}`;
-    const isValidSig = verifySolanaSignature(message, signature, wallet);
+    // ─── 체인별 서명 검증 ───
+    let isValidSig = false;
+    let walletId = wallet; // Solana는 기존 키(acc:{wallet}:count) 유지
+    if (chain === 'solana') {
+      isValidSig = verifySolanaSignature(`x402:${timestamp}`, signature, wallet);
+    } else {
+      // chain === 'base' — 주소는 lowercase 정규화 (TASKS 1.2)
+      walletId = normalizeBaseAddress(wallet);
+      const sigType = (request.headers.get('x-sig-type') || '').trim().toLowerCase();
+      const eip712Opts = {
+        timestamp,
+        signatureHex: signature,
+        addressLower: walletId,
+        chainId: Number(env.BASE_CHAIN_ID || 8453),
+      };
+
+      if (sigType === 'eip191') {
+        isValidSig = verifyEip191Signature(`x402:base:${timestamp}`, signature, walletId);
+      } else if (sigType === 'eip712') {
+        isValidSig = verifyEip712Signature(eip712Opts);
+      } else if (sigType === '') {
+        // 미지정 → EIP-191 검증 후 실패하면 EIP-712 1회 재시도
+        isValidSig =
+          verifyEip191Signature(`x402:base:${timestamp}`, signature, walletId) ||
+          verifyEip712Signature(eip712Opts);
+      }
+      // 그 외(sig-type: ed25519 등) → Base 미지원이므로 인증 실패 처리
+    }
 
     if (isValidSig && kvStore) {
-      let count = parseInt((await kvStore.get(`acc:${wallet}:count`)) || '-1', 10);
+      if (chain === 'solana') {
+        // Solana 크레딧 확인: acc:{wallet}:count (+ allowed/used 마이그레이션 유지)
+        let count = parseInt((await kvStore.get(`acc:${wallet}:count`)) || '-1', 10);
+        if (count < 0) {
+          const allowed = parseInt((await kvStore.get(`acc:${wallet}:allowed`)) || '0', 10);
+          const used = parseInt((await kvStore.get(`acc:${wallet}:used`)) || '0', 10);
+          count = allowed - used;
+        }
 
-      // 하위 호환성: 기존 acc:${wallet}:allowed 및 used 기준 데이터 마이그레이션
-      if (count < 0) {
-        const allowed = parseInt((await kvStore.get(`acc:${wallet}:allowed`)) || '0', 10);
-        const used = parseInt((await kvStore.get(`acc:${wallet}:used`)) || '0', 10);
-        count = allowed - used;
+        if (count <= 0) {
+          return { plan: 'free', limits: FREE_LIMITS, wallet, remainingCount: 0 };
+        }
+
+        const updatedCount = count - 1;
+        await kvStore.put(`acc:${wallet}:count`, updatedCount.toString());
+
+        return {
+          plan: 'pro',
+          limits: PRO_LIMITS,
+          userId: wallet,
+          authType: 'solana_wallet',
+          remainingCredits: updatedCount,
+          remainingCount: updatedCount
+        };
       }
 
-      // count가 0 이하일 경우 무료 플랜으로 동작
+      // Base 크레딧: acc:base:{walletLower}:count
+      // (신규 키 — allowed/used 마이그레이션 분기 불필요, TASKS 1.4)
+      let count = parseInt((await kvStore.get(`acc:base:${walletId}:count`)) || '-1', 10);
       if (count <= 0) {
-        return { plan: 'free', limits: FREE_LIMITS, wallet, remainingCount: 0 };
+        return { plan: 'free', limits: FREE_LIMITS, wallet: walletId, remainingCount: 0 };
       }
 
-      // 유료 요청 1회당 count -1 차감
       const updatedCount = count - 1;
-      await kvStore.put(`acc:${wallet}:count`, updatedCount.toString());
+      await kvStore.put(`acc:base:${walletId}:count`, updatedCount.toString());
 
       return {
         plan: 'pro',
         limits: PRO_LIMITS,
-        userId: wallet,
-        authType: 'solana_wallet',
+        userId: walletId,
+        authType: 'base_wallet',
         remainingCredits: updatedCount,
         remainingCount: updatedCount
       };
@@ -699,32 +956,62 @@ async function getPlan(request, env) {
 }
 
 /**
- * Solana Ed25519 서명 검증 헬퍼
- */
-function verifySolanaSignature(message, signatureBase58, publicKeyBase58) {
-  try {
-    const messageBytes = new TextEncoder().encode(message);
-    const signatureBytes = bs58.decode(signatureBase58);
-    // bs58 public key -> Uint8Array (32 bytes)
-    const publicKeyBytes = bs58.decode(publicKeyBase58);
-
-    return nacl.sign.detached.verify(messageBytes, signatureBytes, publicKeyBytes);
-  } catch (e) {
-    return false;
-  }
-}
-
-/**
- * 402 Payment Required 응답 반환
+ * 402 Payment Required 응답 반환 (멀티체인, 가이드 섹션 5)
+ * - 최상위 `service_wallet` / `network: "solana"` **유지** (기존 파서 하위 호환)
+ * - `networks[]`에 solana + base 객체 추가
+ * - `PAYMENT-REQUIRED` 헤더에도 `networks` 포함
  */
 function x402PaymentRequiredResponse(env, message = 'Payment Required') {
   const payTo = env.SERVICE_WALLET_ADDRESS || 'GuUdPHj3dnafbFvF2gMscCVAMCd4NvSE5ktsrbdAvT4E';
+  const usdcMint = env.USDC_MINT_ADDRESS || 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+  const baseWallet = env.BASE_SERVICE_WALLET_ADDRESS;
+  const baseUsdc = env.BASE_USDC_ADDRESS;
+  const chainId = Number(env.BASE_CHAIN_ID || 8453);
+
+  const networks = [
+    {
+      network: 'solana',
+      currency: 'USDC',
+      service_wallet: payTo,
+      usdc: usdcMint,
+      rpc: env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
+      auth: { type: 'ed25519', message: 'x402:{timestamp}' },
+    },
+  ];
+
+  // Base 수신 지갑이 설정된 경우에만 안내 (미설정 시 402에 노출 금지)
+  if (typeof baseWallet === 'string' && /^0x[0-9a-fA-F]{40}$/.test(baseWallet)) {
+    networks.push({
+      network: 'base',
+      chain_id: chainId,
+      currency: 'USDC',
+      service_wallet: baseWallet,
+      usdc: baseUsdc,
+      rpc: env.BASE_RPC_URL || 'https://mainnet.base.org',
+      decimals: 6,
+      auth: {
+        default: 'eip191',
+        eip191: { message: 'x402:base:{timestamp}' },
+        eip712: {
+          domain: { name: 'AZNP', version: '1', chainId },
+          types: {
+            X402Auth: [
+              { name: 'message', type: 'string' },
+              { name: 'timestamp', type: 'uint256' },
+            ],
+          },
+          primaryType: 'X402Auth',
+        },
+      },
+    });
+  }
 
   const paymentDetails = {
     error: 'Payment Required',
-    message: 'Insufficient credits or missing Solana Wallet authentication signature.',
-    service_wallet: payTo,
-    network: 'solana',
+    message: 'Insufficient credits or missing wallet authentication signature.',
+    service_wallet: payTo, // 기존 파서 호환 (고정 유지)
+    network: 'solana',     // 기존 파서 호환 (고정 유지)
+    networks,
     currency: 'USDC',
     min_deposit: '$20 USDC',
     tiers: {
@@ -732,9 +1019,11 @@ function x402PaymentRequiredResponse(env, message = 'Payment Required') {
       'Enterprise': '$100 USDC = 80,000 requests ($0.00125/req)'
     },
     auth_headers_required: {
-      'x-wallet-address': '<SOLANA_PUBLIC_KEY>',
-      'x-signature': '<Ed25519_SIGNATURE_OF_x402:{timestamp}>',
-      'x-timestamp': '<UNIX_TIMESTAMP>'
+      'x-wallet-address': '<SOLANA_PUBLIC_KEY | 0x_EVM_ADDRESS>',
+      'x-signature': '<Ed25519_BASE58 | 0x_EVM_SIGNATURE>',
+      'x-timestamp': '<UNIX_TIMESTAMP>',
+      'x-chain': 'solana | base',
+      'x-sig-type': 'ed25519 | eip191 | eip712'
     },
     topup_endpoint: 'POST /v1/topup'
   };
@@ -749,8 +1038,7 @@ function x402PaymentRequiredResponse(env, message = 'Payment Required') {
         'PAYMENT-REQUIRED': JSON.stringify({
           amount: '20.0',
           currency: 'USDC',
-          network: 'solana',
-          payTo,
+          networks,
           description: 'AZNP Pro Markdown conversion credits'
         }),
       },

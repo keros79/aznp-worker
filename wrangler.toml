@@ -12,6 +12,11 @@ SOLANA_RPC_URL = "https://api.mainnet-beta.solana.com"
 USDC_MINT_ADDRESS = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 X402_PRICE_USDC = "0.00166"
 X402_NETWORK = "solana"
+# Base (EVM L2) 수신 지갑 및 온체인 결제 바인딩
+BASE_CHAIN_ID = "8453"
+BASE_RPC_URL = "https://mainnet.base.org"
+BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+BASE_SERVICE_WALLET_ADDRESS = "0x22E2076148c529981495c3C02A23DfB1D4f8Db9C"
 
 # ─── KV Namespace 바인딩 ──────────────────────────────────────────────────────
 [[kv_namespaces]]
