@@ -1232,3 +1232,14 @@ function isPrivateHost(hostname) {
   ];
   return privateRanges.some(r => r.test(hostname));
 }
+
+// ─── 테스트/디버그용 내보내기 ─────────────────────────────────────────────────────
+// 배포 번들에는 영향이 없다(같은 모듈을 재사용). _integration.test.mjs가 내부 함수를 직접 검증한다.
+export {
+  getPlan,
+  handleTopup,
+  handleBaseTopup,
+  callBaseRpc,
+  x402PaymentRequiredResponse,
+  jsonResponse,
+};

@@ -12,7 +12,7 @@
     "kv:create:apikeys": "wrangler kv namespace create API_KEYS",
     "kv:list": "wrangler kv namespace list",
     "kv:put:prokey": "wrangler kv key put --namespace-id=<RESULTS_KV_ID>",
-    "test": "echo 'No automated tests yet. Use curl for manual testing.'"
+    "test": "node _auth.test.mjs && node _integration.test.mjs"
   },
   "dependencies": {
     "@noble/hashes": "^1.8.0",

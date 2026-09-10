@@ -111,7 +111,8 @@ export function resolveChain({ declared, address }) {
   const validChain = chain === 'solana' || chain === 'base';
   const addr = address || '';
 
-  if (chain === undefined || chain === '') {
+  // 헤더 미전달(null)/빈 문자열은 "선언 없음"으로 취급 → 주소 형식으로 추론
+  if (chain === undefined || chain === null || chain === '') {
     return { chain: isBaseAddress(addr) ? 'base' : 'solana' };
   }
 

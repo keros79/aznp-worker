@@ -717,8 +717,9 @@ aznp_pro_<random_32_chars>
 
 | 단계 | 내용 | 우선순위 |
 |------|------|----------|
-| v2.1 | 다층 캐시 + CPU/토큰 최적화 (현재) | ✅ |
-| v2.2 | 실제 Rate Limit (KV sliding window 또는 DO) | 높음 |
+| v2.1 | 다층 캐시 + CPU/토큰 최적화 | ✅ |
+| v2.1.1 | **Multi-Chain 온체인 결제 (현재)** — Solana Ed25519 + Base EIP-191/EIP-712 지갑 인증, Solana/Base native USDC 충전, 402 멀티체인 응답 | ✅ |
+| v2.2 | 실제 Rate Limit (KV sliding window, `src/rateLimit.js`) | ✅ |
 | v2.3 | Browser Rendering 완전 연동 | 높음 |
 | v2.4 | Workers AI 요약 + 캐시 | 중간 |
 | v2.5 | 도메인별 프리셋 규칙 (KV) | 중간 |

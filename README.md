@@ -10,7 +10,7 @@
 - **75~90% 토큰 절감**: 지저분한 HTML(광고, 네비게이션, CSS/JS 등)을 완벽 제거해 LLM 비용 극대화
 - **Pro OpenAPI Spec Compression**: `openapi.json` / `swagger.json` URL 요청 시 80~90% 초경량 파싱 및 압축 반환 (Pro 전용, Free는 307 Redirect)
 - **File Bypass**: PDF·이미지·영상 등 파일 URL은 변환 없이 원본으로 307 Redirect 처리
-- **Solana Wallet-based Stateless Auth**: 회원가입이나 API Key 발급 없이 **본인의 솔라나 지갑 주소(PublicKey)** 자체를 계정 ID로 사용
+- **Multi-Chain Wallet-based Stateless Auth**: 회원가입이나 API Key 발급 없이 본인 지갑 주소를 계정 ID로 사용 — **Solana(Ed25519)** + **Base(EIP-191 / EIP-712)** 지원, 체인별 독립 크레딧(`acc:` / `acc:base:`)과 native USDC 충전
 - **AI 표준 규격 노출**: 도메인 루트에서 `/llms.txt`, `/llms-full.txt`, `/openapi.json`을 제공하여 AI 에이전트들이 스스로 학습하고 이용 가능
 - **3-Tier Cascading Engine**: Tier 1 (Cloudflare Native) → Tier 2 (자체 고속 변환) → Tier 3 (Browser Rendering `render=true`)
 - **다층 에지 캐시**: Cache API (L1) + Cloudflare KV (L2) 이중 캐싱으로 초고속 응답 (CPU 시간 최소화)
