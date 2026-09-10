@@ -730,10 +730,13 @@ aznp_pro_<random_32_chars>
 | v2.1 | 다층 캐시 + CPU/토큰 최적화 | ✅ |
 | v2.1.1 | **Multi-Chain 온체인 결제 (현재)** — Solana Ed25519 + Base EIP-191/EIP-712 지갑 인증, Solana/Base native USDC 충전, 402 멀티체인 응답 | ✅ |
 | v2.2 | 실제 Rate Limit (KV sliding window, `src/rateLimit.js`) | ✅ |
-| v2.3 | Browser Rendering 완전 연동 | 높음 |
-| v2.4 | Workers AI 요약 + 캐시 | 중간 |
-| v2.5 | 도메인별 프리셋 규칙 (KV) | 중간 |
-| v2.6 | Pages 대시보드 (사용량/절감 리포트) | 중간 |
+| v2.7 | **AI Agent 응답 포맷 (현재)** — `format=toml/yaml/json-ld`, `max_tokens` 블록 단위 절단(`src/truncate.js`), LLM-readable 에러(TOML 기본) | 검증 중 |
+| v2.7.1 | 제출 전 공개 표면 — 레포 Public, LICENSE, Solana-first 카피, convert 무료 (`docs/TASKS.md` 3단계) | 높음 |
+| v2.8 | **Superteam $10k** — `@aznp/mcp-server` ($5k) + Eliza 또는 Agent Kit ($3k) + 유지보수 4개월 ($2k). Base 코드 유지, 그랜트 서사에서만 제외 | 높음 |
+| v2.3 | Browser Rendering 완전 연동 | 그랜트 후 |
+| v2.4 | Workers AI 요약 + 캐시 | 그랜트 후 |
+| v2.5 | 도메인별 프리셋 규칙 (KV) | 그랜트 후 |
+| v2.6 | Pages 대시보드 (사용량/절감 리포트) | 그랜트 후 |
 | v3.0 | Team 플랜 + 좌석 관리 | 낮음 |
 
 ---

@@ -1,9 +1,34 @@
 ﻿# AZNP 작업 체크리스트
 
-이 문서는 `docs/SPEC.md` · `docs/AZNP_Payment_Integration_Guide.md` 기준의 구현 단계입니다.
-작업 착수 전 해당 단계의 항목을 확인하고, 완료 후 체크박스를 `[x]`로 갱신하세요.
+이 문서는 `docs/SPEC.md` · `docs/AZNP_Payment_Integration_Guide.md` 및 **Superteam $10k 마이크로그랜트** 기준입니다.
+완료 후 체크박스를 `[x]`로 갱신하세요. **이전 단계가 모두 `[x]`가 되기 전에는 다음 지급 단계(5–)를 착수하지 않습니다.**
 
 > 파일명: 프로젝트 규칙(`AGENTS.md`)에 따라 `docs/TASKS.md` 를 사용합니다.
+
+### 목표 · 결정
+
+| 항목 | 결정 |
+|------|------|
+| 펀딩 | **Superteam 마이크로그랜트 $10,000** ([earn.superteam.fun/grants](https://earn.superteam.fun/grants/)) |
+| 트랙 | 공개재 · MIT · convert/MCP/플러그인 **영구 무료**. 유료 크레딧·Lemon은 그랜트 제품 아님 |
+| Why Solana | 결제 아님. **같은 Solana 키페어로 요청 신원** + Eliza / Agent Kit 훅 |
+| Base 멀티체인 | **코드는 유지.** 그랜트 서사·README 앞면·`/health` 카피에서만 빼다 |
+| 지급 대상 | MCP 서버 구현·배포 (지금 Worker 기능을 이어서 만드는 그랜트 아님) |
+
+### 현황
+
+| 단계 | 내용 | 금액 | 상태 |
+|------|------|------|------|
+| 0–1 | 기반 + Base 멀티체인 (코드 유지) | — | 완료 |
+| 2 | 포맷 / `max_tokens` / LLM 에러 | — | 구현됨, **2.6 검증 미완** |
+| 3 | 제출 전 공개 표면 (레포 Public, Solana-first 카피, convert 무료) | 지급 아님 | **← 현재** |
+| 4 | Superteam 제안서 $10k | 지급 아님 | 대기 |
+| 5 | `@aznp/mcp-server` 구현·배포 | **$5,000** | 대기 |
+| 6 | Eliza OS 플러그인 또는 Solana Agent Kit 툴 + 데모 | **$3,000** | 대기 |
+| 7 | 유지보수 4개월 | **$2,000** ($500×4) | 대기 |
+| 8 | SPEC 잔여 (Browser / Workers AI / 프리셋 / Pages) | 그랜트 밖 | 후순위 |
+
+합계 **$10,000**. 0–4는 PoC·제출 준비. Base 함수 삭제는 이 목록에 없음.
 
 ---
 
@@ -260,35 +285,180 @@
 - [x] `docs/ARCHITECTURE.md` 파이프라인 [7] 응답: markdown/json/toml/yaml/json-ld + truncate 후처리. 파일 목록에 `formatters.js` (및 truncate 모듈)
 - [x] `README.md` 쿼리 파라미터·에러 예시 동기화
 
-### 2.6 검증
+### 2.6 검증 (현재 작업)
 
-`_integration.test.mjs` (또는 동등 단위 테스트)에 실네트워크 없이 추가. `npm test`가 기존 1단계 케이스를 포함해 통과해야 한다.
+`_integration.test.mjs`에 실네트워크 없이 추가. **워킹 카피에서 2.6 테스트 블록이 빠져 있으면 먼저 복구한다.** `npm test`가 기존 1단계 케이스를 포함해 통과해야 한다.
 
-- [x] 기본 `GET /?url=` → `Content-Type: text/markdown`, 본문이 마크다운
-- [x] `format=toml` (Pro) → TOML 파싱 가능, `title`/`source`/`content` 존재
-- [x] `format=yaml` (Pro) → 헤딩 있는 픽스처에서 중첩 키 존재
-- [x] `format=json-ld` (Pro) → `@context` / `@type` = Article
-- [x] `format=json` (Pro) → 기존 `{ title, source, content, meta }` 유지
-- [x] `format=xml` 등 미지원 → 400 + `unsupported_format`
-- [x] Free + `format=toml|yaml|json-ld|json` → 402 (JSON 유지)
-- [x] `max_tokens=2000` (Pro): 긴 픽스처에서 `estimateTokens(body) <= 2000`, H1이 잘리지 않음, 본문 중간 `slice`가 아님
-- [x] 동일 URL에 `max_tokens=500` vs `2000` → 캐시 키가 달라 서로 다른 본문
-- [x] `max_tokens` 없이 요청 → 기존 전체 본문 (회귀)
-- [x] 없는 경로 404 → TOML `[error]` + `action_recommendation` (JSON 아님)
-- [x] `format=json` 요청의 400/404 → JSON 에러
-- [x] 402 · `POST /v1/topup` 에러 → JSON 유지
-- [x] 기존 Solana/Base 인증·topup·402 `networks` 테스트 회귀 없음
+- [ ] `_integration.test.mjs`에 2.6 픽스처 파이프(mock fetch + mock Cache API) 복구
+- [ ] 기본 `GET /?url=` → `Content-Type: text/markdown`, 본문이 마크다운
+- [ ] `format=toml` (Pro) → TOML 파싱 가능, `title`/`source`/`content` 존재
+- [ ] `format=yaml` (Pro) → `title` / `source` / `content: |` 존재. (구현은 flat YAML. 2.1의 “헤딩 중첩 맵”과 다르면 SPEC/ARCHITECTURE에 **flat이 정본**이라고 명시)
+- [ ] `format=json-ld` (Pro) → `@context` / `@type` = Article
+- [ ] `format=json` (Pro) → 기존 `{ title, source, content, meta }` 유지
+- [ ] `format=xml` 등 미지원 → 400 + `unsupported_format`
+- [ ] Free + `format=toml|yaml|json-ld|json` → **현재 구현은 402.** 3.3에서 게이트를 연 뒤에는 이 항목을 200으로 바꾸고 다시 체크
+- [ ] `max_tokens=2000` (Pro): 긴 픽스처에서 `estimateTokens(body) <= 2000`, H1이 잘리지 않음, 본문 중간 `slice`가 아님
+- [ ] 동일 URL에 `max_tokens=500` vs `2000` → 캐시 키가 달라 서로 다른 본문
+- [ ] `max_tokens` 없이 요청 → 기존 전체 본문 (회귀)
+- [ ] 없는 경로 404 → TOML `[error]` + `action_recommendation` (JSON 아님)
+- [ ] `format=json` 요청의 400/404 → JSON 에러
+- [ ] 402 · `POST /v1/topup` 에러 → JSON 유지 (topup 코드는 삭제하지 않음. 그랜트 제품이 아닐 뿐)
+- [ ] 기존 Solana/Base 인증·topup·402 `networks` 테스트 회귀 없음 (Base **테스트는 유지**)
+- [ ] `npm test` 전체 PASS (`_auth.test.mjs` + `_integration.test.mjs`)
 
 ---
 
-## 3단계 이후
+## 3단계: 제출 전 공개 표면 (지급 아님 · 현재)
 
-2단계가 모두 `[x]`가 되기 전에는 아래를 착수하지 않는다.
+**목표**: Superteam 심사자가 5분에 클론·호출할 수 있게 한다. **Base 코드는 지우지 않는다.** 카피만 Solana-first.
+**제약**: 배포는 사용자 승인 후에만. 2.6과 병행 가능.
 
-- [ ] Browser Rendering 완전 연동 (`docs/SPEC.md` v2.3)
-- [ ] Workers AI 요약 + 캐시 (`docs/SPEC.md` v2.4)
-- [ ] 도메인별 프리셋 규칙 KV (`docs/SPEC.md` v2.5)
-- [ ] Pages 대시보드 (`docs/SPEC.md` v2.6)
+### 3.1 레포 공개 (직접 해야 함)
+
+- [x] 루트 `LICENSE` (MIT)
+- [ ] GitHub **Settings → Change visibility → Public**. 지금 `github.com/keros79/aznp-worker`는 404. 로컬에서 대신 열 수 없음
+- [ ] clone URL이 README·제안서와 같음
+
+### 3.2 Solana-first 카피 (Base는 코드 유지)
+
+- [ ] README 핵심 특징에서 Base / 멀티체인을 내림. Solana Ed25519 + 무료 convert만 앞면
+- [ ] README 요금표($20 USDC / Lemon $19)를 내리거나 “그랜트 제품 아님”으로 접음
+- [ ] `GET /health`의 `auth`를 Solana 표기로 (예: `solana-ed25519`). Base 검증 코드는 그대로
+- [ ] 402 `networks[]`의 base 객체는 **응답에서 당장 안 빼도 됨.** 제안서·README만 Solana
+
+### 3.3 convert 공개 무료
+
+심사자가 `format=json`을 치면 402가 나면 제안서(무료 공개재)와 모순.
+
+- [ ] `toml` / `yaml` / `json` / `json-ld` / `max_tokens`를 **지갑·크레딧 없이** 허용 (Free 게이트 해제)
+- [ ] `POST /v1/topup` · 크레딧 KV · Base 경로는 **삭제하지 않음**
+- [ ] 2.6의 “Free + format → 402” 테스트를 **200**으로 바꾸고 `npm test` PASS
+
+### 3.4 발견 엔드포인트
+
+README는 `/llms.txt` · `/llms-full.txt` · `/openapi.json`을 제공한다고 하지만 워커는 404.
+
+- [ ] `GET /llms.txt` — Solana 서명 헤더, 무료 convert, MCP 예정. `text/plain`
+- [ ] `GET /llms-full.txt` — 쿼리·에러 코드
+- [ ] `GET /openapi.json` — `GET /`, `/health` (topup은 있어도 그랜트 제품으로 안 적음)
+- [ ] 인증 없이 200. 캐시 키에 넣지 않음
+
+### 3.5 문서 구멍
+
+- [ ] `docs/ARCHITECTURE.md`에 `formatters.js`, `truncate.js`
+- [ ] YAML flat이 정본이라고 SPEC/TASKS 2.1과 맞춤
+- [ ] `AGENTS.md` “자동화 테스트 없음” → `npm test`
+- [ ] Browser Rendering은 이번 그랜트 **아님** (코드 폴백만 유지)
+- [ ] D1 INSERT 없으면 SPEC에 “미구현”
+
+### 3.6 검증
+
+- [ ] 공개 레포가 브라우저에서 열림
+- [ ] `/health` · `/llms.txt` 200, auth 카피 Solana-first
+- [ ] unsigned `GET /?url=&format=json` 이 402가 아님
+- [ ] `npm test` PASS (Base 단위 테스트 포함, 삭제 아님)
+
+---
+
+## 4단계: Superteam 제안서 $10k (지급 아님)
+
+**목표**: [Superteam Grants](https://earn.superteam.fun/grants/) 제출문. Foundation $20k 초안(`docs/AZNP_Solana_Foundation_Grant_Proposal.docx`)은 재료로만 쓰고 **금액을 $10k로 다시 씀.**
+3단계와 병행 가능. 제출은 3.1 레포 Public 이후.
+
+### 4.1 Why Solana (제안서 한가운데)
+
+- [x] 초안: 키페어 신원 + Eliza / Agent Kit. 크레딧 아님 (`_build_grant_proposal.mjs`)
+- [ ] Superteam용 짧은 버전으로 옮김 (1페이지 Why Solana)
+- [ ] 차별 한 표: Agent Kit MCP, Foundation `pay`, Cloudflare Markdown, Jina — AZNP는 **무료 convert + Solana 키페어 신원 + Eliza/Kit 플러그인**
+- [ ] Base / 유료 크레딧 / Lemon을 제안서에 안 씀 (코드 삭제가 아님)
+
+### 4.2 마일스톤 문구 ($10,000)
+
+- [ ] 서두: 지금 Worker 기능을 새로 만드는 그랜트가 아님. 지급은 **MCP 구현·배포**
+- [ ] M1 **$5,000** — `@aznp/mcp-server` npm + stdio + 공개 엔드포인트. 파서 재작성 아님. convert 무료
+- [ ] M2 **$3,000** — Eliza 플러그인 **또는** Solana Agent Kit 툴 하나 + 공개 데모. 업스트림 머지 불필요
+- [ ] M3 **$2,000** — 유지보수 4개월 × $500. MCP SDK, tweetnacl/bs58, 엔드포인트 가용성. Web3.js 없음
+- [ ] 합계 **$10,000**
+
+### 4.3 제출
+
+- [ ] https://earn.superteam.fun/grants/ 폼
+- [ ] 공개 GitHub + LICENSE + 라이브 `/health`
+- [ ] 제출 전 unsigned convert 1회가 200
+
+---
+
+## 5단계: `@aznp/mcp-server` (M1 · $5,000)
+
+**목표**: 기존 Worker를 MCP로 감싸 **구현·배포**. 파서·Base 삭제가 아님.
+**착수 조건**: 3단계 `[x]`.
+
+### 5.1 패키지
+
+- [ ] `packages/mcp-server` 또는 이 레포 공개 하위 패키지
+- [ ] npm `@aznp/mcp-server`, MIT
+- [ ] `@modelcontextprotocol/sdk`. Worker는 HTTP로 호출 (코드 복사 금지)
+- [ ] stdio (`npx -y @aznp/mcp-server`)
+- [ ] 공개 원격 MCP URL
+
+### 5.2 툴
+
+- [ ] `convert_url` — `url`, `format?`, `max_tokens?`. **무료. 결제 툴 없음**
+- [ ] `health`
+- [ ] 시크릿 키는 서버가 받지 않음. 선택적 Solana 서명은 클라이언트/환경변수
+
+### 5.3 배포 · 검증
+
+- [ ] npm publish
+- [ ] Cursor / Claude `mcp.json` 예시
+- [ ] `initialize` / `list_tools` / `call_tool` 테스트
+- [ ] 픽스처: 정적 HTML, Solana docs 1개, GitHub README 1개
+- [ ] unsigned convert 성공
+- [ ] 녹화 워크스루 (GUI CI 아님)
+
+---
+
+## 6단계: Eliza 또는 Agent Kit (M2 · $3,000)
+
+**목표**: first-party 플러그인 **하나** + 데모. 둘 다 하면 가산, 지급 조건은 하나.
+**착수 조건**: 5단계 `[x]`.
+
+- [ ] Eliza 플러그인 **또는** Solana Agent Kit 툴 (같은 Solana 키페어 재사용)
+- [ ] 단위 테스트: 스키마 + mock MCP convert
+- [ ] 라이브 데모 녹화 (docs URL → 마크다운)
+- [ ] README 워크스루
+- [ ] 업스트림 PR은 선택. 머지 대기 없음
+
+---
+
+## 7단계: 유지보수 (M3 · $2,000 / $500×4)
+
+**착수 조건**: 5단계 배포 후. 월 단위.
+
+반복:
+
+- [ ] GitHub 이슈·버그 (MCP, 플러그인, Worker)
+- [ ] `@modelcontextprotocol/sdk`, tweetnacl / bs58. **Web3.js 없음**
+- [ ] 공개 MCP + Worker 가용성. convert 무료 유지
+- [ ] Eliza / Agent Kit API 드리프트
+- [ ] 툴 스키마 문서
+
+- [ ] 1개월차 $500
+- [ ] 2개월차 $500
+- [ ] 3개월차 $500
+- [ ] 4개월차 $500
+
+---
+
+## 8단계: SPEC 잔여 (그랜트 밖 · 후순위)
+
+5–6보다 먼저 착수하지 않음.
+
+- [ ] Browser Rendering 완전 연동 (`@cloudflare/puppeteer` in package.json)
+- [ ] Workers AI 요약 (`mode=summary` 스텁 교체)
+- [ ] 도메인 프리셋 KV
+- [ ] Pages 대시보드
+- [ ] Python SDK (이번 $10k에 없음. 이후)
 
 ---
 

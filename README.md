@@ -174,4 +174,4 @@ binding = "BROWSER"
 
 ## 📄 라이선스
 
-MIT License
+MIT License. See [`LICENSE`](LICENSE).
