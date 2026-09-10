@@ -5,3 +5,14 @@ dist/
 .dev.vars
 *.local
 .DS_Store
+
+# local test / editor dumps
+*.tmp
+*.log
+_*.txt
+*-out.txt
+*-run.txt
+authlog.txt
+chk.txt
+trim26.ps1
+_fix26.mjs
