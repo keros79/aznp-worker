@@ -21,6 +21,7 @@
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
+    "viem": "^2.21.0",
     "wrangler": "^3.0.0"
   },
   "engines": {

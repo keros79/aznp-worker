@@ -1,11 +1,11 @@
 /**
- * AZNP ¸ÖÆ¼Ã¼ÀÎ ÅëÇÕ Å×½ºÆ® (mock KV + mock RPC)
+ * AZNP ï¿½ï¿½Æ¼Ã¼ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½×½ï¿½Æ® (mock KV + mock RPC)
  *
- * ´ë»ó: src/worker.js ³»ºÎ ÇÔ¼ö (getPlan / handleTopup / handleBaseTopup /
- *       callBaseRpc / x402PaymentRequiredResponse) + ±âº» fetch ¶ó¿ìÆÃ(/health)
+ * ï¿½ï¿½ï¿½: src/worker.js ï¿½ï¿½ï¿½ï¿½ ï¿½Ô¼ï¿½ (getPlan / handleTopup / handleBaseTopup /
+ *       callBaseRpc / x402PaymentRequiredResponse) + ï¿½âº» fetch ï¿½ï¿½ï¿½ï¿½ï¿½(/health)
  *
- * ½ÇÇà: node _integration.test.mjs
- *  - Base RPC / Solana RPC´Â global fetch ¸¦ ÆĞÄ¡ÇØ ¸ñ ÀÀ´äÀ¸·Î ´ëÃ¼ (½Ç³×Æ®¿öÅ© ¹«È£Ãâ)
+ * ï¿½ï¿½ï¿½ï¿½: node _integration.test.mjs
+ *  - Base RPC / Solana RPCï¿½ï¿½ global fetch ï¿½ï¿½ ï¿½ï¿½Ä¡ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Ã¼ (ï¿½Ç³ï¿½Æ®ï¿½ï¿½Å© ï¿½ï¿½È£ï¿½ï¿½)
  */
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
@@ -25,7 +25,7 @@ function check(name, cond, extra = '') {
   console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${extra ? '  | ' + extra : ''}`);
 }
 
-// ¦¡¦¡¦¡ Mock KV ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Mock KV ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 function createKV(initial = {}) {
   const map = new Map(Object.entries(initial));
   return {
@@ -42,8 +42,8 @@ function createKV(initial = {}) {
   };
 }
 
-// ¦¡¦¡¦¡ Mock global fetch (RPC) ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
-// handler: async (jsonRpcBody) => result | null | undefined(¿¡·¯)
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Mock global fetch (RPC) ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+// handler: async (jsonRpcBody) => result | null | undefined(ï¿½ï¿½ï¿½ï¿½)
 function mockFetch(handler) {
   const orig = globalThis.fetch;
   globalThis.fetch = async (url, init) => {
@@ -61,7 +61,7 @@ function mockFetch(handler) {
   return () => { globalThis.fetch = orig; };
 }
 
-// ¦¡¦¡¦¡ »ó¼ö (wrangler.toml°ú µ¿ÀÏ) ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ (wrangler.tomlï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½) ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 const SERVICE_WALLET = 'GuUdPHj3dnafbFvF2gMscCVAMCd4NvSE5ktsrbdAvT4E';
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 const BASE_SERVICE_WALLET = '0x22E2076148c529981495c3C02A23DfB1D4f8Db9C';
@@ -83,7 +83,7 @@ function makeEnv({ results = {}, apiKeys = {}, baseWallet = BASE_SERVICE_WALLET 
   };
 }
 
-// ¦¡¦¡¦¡ ¼­¸í ÇïÆÛ ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 function solanaSign(ts) {
   const kp = nacl.sign.keyPair();
   const sig = nacl.sign.detached(new TextEncoder().encode(`x402:${ts}`), kp.secretKey);
@@ -122,7 +122,7 @@ function baseRequest({ address, sig, ts, chain = 'base', sigType = 'eip191' }) {
 
 const now = Math.floor(Date.now() / 1000);
 
-// ¦¡¦¡¦¡ 1. /health ¸ÖÆ¼Ã¼ÀÎ ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 1. /health ï¿½ï¿½Æ¼Ã¼ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const env = makeEnv();
   const res = await worker.fetch(new Request('http://localhost/health'), env, {});
@@ -131,97 +131,97 @@ const now = Math.floor(Date.now() / 1000);
   check('health: version', data.version === '2.1');
 }
 
-// ¦¡¦¡¦¡ 2. getPlan: Base EIP-191 ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 2. getPlan: Base EIP-191 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const ts = now;
   const { address, sig } = await eip191Sign(ts);
   const env = makeEnv({ results: { [`acc:base:${address}:count`]: '5' } });
   const plan = await getPlan(baseRequest({ address, sig, ts, sigType: 'eip191' }), env);
-  check('Base EIP-191: À¯È¿ ¼­¸í+Å©·¹µ÷ ¡æ pro', plan.plan === 'pro');
+  check('Base EIP-191: ï¿½ï¿½È¿ ï¿½ï¿½ï¿½ï¿½+Å©ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ pro', plan.plan === 'pro');
   check('Base EIP-191: authType base_wallet', plan.authType === 'base_wallet');
   check('Base EIP-191: userId lowercase', plan.userId === address);
-  check('Base EIP-191: Å©·¹µ÷ 1È¸ Â÷°¨(5¡æ4)', plan.remainingCount === 4 && plan.remainingCredits === 4);
+  check('Base EIP-191: Å©ï¿½ï¿½ï¿½ï¿½ 1È¸ ï¿½ï¿½ï¿½ï¿½(5ï¿½ï¿½4)', plan.remainingCount === 4 && plan.remainingCredits === 4);
   const stored = await env.RESULTS_KV.get(`acc:base:${address}:count`);
-  check('Base EIP-191: KV¿¡ 4 ÀúÀå', stored === '4');
+  check('Base EIP-191: KVï¿½ï¿½ 4 ï¿½ï¿½ï¿½ï¿½', stored === '4');
 }
 
-// ¦¡¦¡¦¡ 3. getPlan: Base EIP-712 ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 3. getPlan: Base EIP-712 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const ts = now;
   const { address, sig } = await eip712Sign(ts);
   const env = makeEnv({ results: { [`acc:base:${address}:count`]: '3' } });
   const plan = await getPlan(baseRequest({ address, sig, ts, sigType: 'eip712' }), env);
-  check('Base EIP-712: À¯È¿ ¼­¸í+Å©·¹µ÷ ¡æ pro', plan.plan === 'pro');
+  check('Base EIP-712: ï¿½ï¿½È¿ ï¿½ï¿½ï¿½ï¿½+Å©ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ pro', plan.plan === 'pro');
   check('Base EIP-712: authType base_wallet', plan.authType === 'base_wallet');
-  check('Base EIP-712: Å©·¹µ÷ Â÷°¨(3¡æ2)', plan.remainingCount === 2);
+  check('Base EIP-712: Å©ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½(3ï¿½ï¿½2)', plan.remainingCount === 2);
 }
 
-// ¦¡¦¡¦¡ 4. getPlan: Base ±âº»°ª (x-sig-type ¹ÌÁöÁ¤ ¡æ EIP-191 ÈÄ EIP-712 Àç½Ãµµ) ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 4. getPlan: Base ï¿½âº»ï¿½ï¿½ (x-sig-type ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ EIP-191 ï¿½ï¿½ EIP-712 ï¿½ï¿½Ãµï¿½) ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const ts = now;
   const { address, sig } = await eip191Sign(ts);
   const env = makeEnv({ results: { [`acc:base:${address}:count`]: '2' } });
   const plan = await getPlan(baseRequest({ address, sig, ts, sigType: '' }), env);
-  check('Base ±âº»°ª(sig-type ¾øÀ½): EIP-191·Î pro', plan.plan === 'pro');
+  check('Base ï¿½âº»ï¿½ï¿½(sig-type ï¿½ï¿½ï¿½ï¿½): EIP-191ï¿½ï¿½ pro', plan.plan === 'pro');
 }
 
-// ¦¡¦¡¦¡ 5. getPlan: Base ¸¸·á Å¸ÀÓ½ºÅÆÇÁ(>300s) ¡æ pro ¾Æ´Ô ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 5. getPlan: Base ï¿½ï¿½ï¿½ï¿½ Å¸ï¿½Ó½ï¿½ï¿½ï¿½ï¿½ï¿½(>300s) ï¿½ï¿½ pro ï¿½Æ´ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const ts = now - 4000;
   const { address, sig } = await eip191Sign(ts);
   const env = makeEnv({ results: { [`acc:base:${address}:count`]: '5' } });
   const plan = await getPlan(baseRequest({ address, sig, ts, sigType: 'eip191' }), env);
-  check('Base ¸¸·á ts: pro ¾Æ´Ô', plan.plan !== 'pro');
+  check('Base ï¿½ï¿½ï¿½ï¿½ ts: pro ï¿½Æ´ï¿½', plan.plan !== 'pro');
 }
 
-// ¦¡¦¡¦¡ 6. getPlan: Base À§Á¶/ºÒÀÏÄ¡ ¼­¸í ¡æ pro ¾Æ´Ô ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 6. getPlan: Base ï¿½ï¿½ï¿½ï¿½/ï¿½ï¿½ï¿½ï¿½Ä¡ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ pro ï¿½Æ´ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const ts = now;
   const { sig } = await eip191Sign(ts);
   const wrongAcc = '0x' + '11'.repeat(20);
   const env = makeEnv({ results: { [`acc:base:${wrongAcc}:count`]: '5' } });
   const plan = await getPlan(baseRequest({ address: wrongAcc, sig, ts, sigType: 'eip191' }), env);
-  check('Base À§Á¶(ÁÖ¼Ò ºÒÀÏÄ¡): pro ¾Æ´Ô', plan.plan !== 'pro');
+  check('Base ï¿½ï¿½ï¿½ï¿½(ï¿½Ö¼ï¿½ ï¿½ï¿½ï¿½ï¿½Ä¡): pro ï¿½Æ´ï¿½', plan.plan !== 'pro');
 }
 
-// ¦¡¦¡¦¡ 7. getPlan: Ã¼ÀÎ ¸ğ¼ø (x-chain solana + 0x ÁÖ¼Ò) ¡æ chain_mismatch ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 7. getPlan: Ã¼ï¿½ï¿½ ï¿½ï¿½ï¿½ (x-chain solana + 0x ï¿½Ö¼ï¿½) ï¿½ï¿½ chain_mismatch ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const plan = await getPlan(
     baseRequest({ address: BASE_SERVICE_WALLET, sig: '0x1234', ts: now, chain: 'solana' }),
     makeEnv()
   );
-  check('Ã¼ÀÎ ¸ğ¼ø(solana+0x): chain_mismatch', plan.plan === 'chain_mismatch' && !!plan.error);
+  check('Ã¼ï¿½ï¿½ ï¿½ï¿½ï¿½(solana+0x): chain_mismatch', plan.plan === 'chain_mismatch' && !!plan.error);
 }
 
-// ¦¡¦¡¦¡ 8. getPlan: Solana °æ·Î È¸±Í (ed25519 + acc:{wallet}:count) ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 8. getPlan: Solana ï¿½ï¿½ï¿½ È¸ï¿½ï¿½ (ed25519 + acc:{wallet}:count) ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const ts = now;
   const { address, sig } = solanaSign(ts);
   const env = makeEnv({ results: { [`acc:${address}:count`]: '7' } });
   const req = baseRequest({ address, sig, ts, chain: 'solana', sigType: 'ed25519' });
   const plan = await getPlan(req, env);
-  check('Solana ed25519: À¯È¿ ¼­¸í ¡æ pro', plan.plan === 'pro');
+  check('Solana ed25519: ï¿½ï¿½È¿ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ pro', plan.plan === 'pro');
   check('Solana ed25519: authType solana_wallet', plan.authType === 'solana_wallet');
-  check('Solana ed25519: acc:{wallet}:count Â÷°¨(7¡æ6)', plan.remainingCount === 6);
+  check('Solana ed25519: acc:{wallet}:count ï¿½ï¿½ï¿½ï¿½(7ï¿½ï¿½6)', plan.remainingCount === 6);
 }
 
-// ¦¡¦¡¦¡ 9. getPlan: API Key °æ·Î ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 9. getPlan: API Key ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const apiKey = 'aznp_pro_' + 'a'.repeat(32);
   const keyData = JSON.stringify({ plan: 'pro', status: 'active', userId: 'u-1' });
   const env = makeEnv({ apiKeys: { [apiKey]: keyData } });
   const req = new Request('http://localhost/', { headers: { 'X-API-Key': apiKey } });
   const plan = await getPlan(req, env);
-  check('API Key: À¯È¿ ¡æ pro', plan.plan === 'pro' && plan.authType === 'api_key');
+  check('API Key: ï¿½ï¿½È¿ ï¿½ï¿½ pro', plan.plan === 'pro' && plan.authType === 'api_key');
 }
 
-// ¦¡¦¡¦¡ 10. getPlan: ÀÎÁõ ¾øÀ½ ¡æ Free ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 10. getPlan: ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ Free ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const plan = await getPlan(new Request('http://localhost/'), makeEnv());
-  check('ÀÎÁõ ¾øÀ½ ¡æ free', plan.plan === 'free');
+  check('ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ free', plan.plan === 'free');
 }
 
-// ¦¡¦¡¦¡ 11. handleBaseTopup: ¼º°ø (native USDC Transfer) ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 11. handleBaseTopup: ï¿½ï¿½ï¿½ï¿½ (native USDC Transfer) ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const wallet = (await eip191Sign(now)).address;
   const txHash = '0x' + 'ab'.repeat(32);
@@ -244,15 +244,15 @@ const now = Math.floor(Date.now() / 1000);
     const data = await res.json();
     check('Base topup: 200', res.status === 200 && data.success === true);
     check('Base topup: chain=base', data.chain === 'base');
-    check('Base topup: Å©·¹µ÷ Àû¸³(20*600=12000)', data.added_credits === 12000);
+    check('Base topup: Å©ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½(20*600=12000)', data.added_credits === 12000);
     const dedup = await env.RESULTS_KV.get(`tx:base:${txHash}`);
-    check('Base topup: Áßº¹ Å° ÀúÀå', dedup === 'processed');
+    check('Base topup: ï¿½ßºï¿½ Å° ï¿½ï¿½ï¿½ï¿½', dedup === 'processed');
     const count = await env.RESULTS_KV.get(`acc:base:${wallet}:count`);
     check('Base topup: acc:base:...:count = 12000', count === '12000');
   } finally { restore(); }
 }
 
-// ¦¡¦¡¦¡ 12. handleBaseTopup: Áßº¹ Æ®·£Àè¼Ç ¡æ 400 ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 12. handleBaseTopup: ï¿½ßºï¿½ Æ®ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ 400 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const wallet = (await eip191Sign(now)).address;
   const txHash = '0x' + 'cd'.repeat(32);
@@ -260,11 +260,11 @@ const now = Math.floor(Date.now() / 1000);
   const restore = mockFetch(async () => null);
   try {
     const res = await handleBaseTopup(env, { wallet, tx_hash: txHash });
-    check('Base topup: Áßº¹ tx ¡æ 400', res.status === 400);
+    check('Base topup: ï¿½ßºï¿½ tx ï¿½ï¿½ 400', res.status === 400);
   } finally { restore(); }
 }
 
-// ¦¡¦¡¦¡ 13. handleBaseTopup: ÃÖ¼Ò ±İ¾× ¹Ì´Ş ¡æ 400 ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 13. handleBaseTopup: ï¿½Ö¼ï¿½ ï¿½İ¾ï¿½ ï¿½Ì´ï¿½ ï¿½ï¿½ 400 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const wallet = (await eip191Sign(now)).address;
   const txHash = '0x' + '11'.repeat(32);
@@ -280,11 +280,11 @@ const now = Math.floor(Date.now() / 1000);
   try {
     const res = await handleBaseTopup(makeEnv(), { wallet, tx_hash: txHash });
     const data = await res.json();
-    check('Base topup: 10 USDC ¡æ 400', res.status === 400 && /Minimum deposit/i.test(data.error));
+    check('Base topup: 10 USDC ï¿½ï¿½ 400', res.status === 400 && /Minimum deposit/i.test(data.error));
   } finally { restore(); }
 }
 
-// ¦¡¦¡¦¡ 14. handleBaseTopup: USDbC/´Ù¸¥ emitter ¡æ 400 ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 14. handleBaseTopup: USDbC/ï¿½Ù¸ï¿½ emitter ï¿½ï¿½ 400 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const wallet = (await eip191Sign(now)).address;
   const txHash = '0x' + '22'.repeat(32);
@@ -292,7 +292,7 @@ const now = Math.floor(Date.now() / 1000);
   const receipt = {
     status: '0x1',
     logs: [{
-      address: usdbc, // USDbC emitter ¡Á native USDC
+      address: usdbc, // USDbC emitter ï¿½ï¿½ native USDC
       topics: [TOPIC0, wallet.toLowerCase(), BASE_SERVICE_WALLET.toLowerCase()],
       data: '0x' + (100_000_000n).toString(16),
     }],
@@ -301,11 +301,11 @@ const now = Math.floor(Date.now() / 1000);
   try {
     const res = await handleBaseTopup(makeEnv(), { wallet, tx_hash: txHash });
     const data = await res.json();
-    check('Base topup: USDbC emitter ¡æ 400', res.status === 400 && /native USDC Transfer not found/i.test(data.error));
+    check('Base topup: USDbC emitter ï¿½ï¿½ 400', res.status === 400 && /native USDC Transfer not found/i.test(data.error));
   } finally { restore(); }
 }
 
-// ¦¡¦¡¦¡ 15. handleBaseTopup: ¼ö½Å Áö°© ºÒÀÏÄ¡ ¡æ 400 ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 15. handleBaseTopup: ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Ä¡ ï¿½ï¿½ 400 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const wallet = (await eip191Sign(now)).address;
   const txHash = '0x' + '33'.repeat(32);
@@ -320,11 +320,11 @@ const now = Math.floor(Date.now() / 1000);
   const restore = mockFetch(async (body) => body.method === 'eth_getTransactionReceipt' ? receipt : null);
   try {
     const res = await handleBaseTopup(makeEnv(), { wallet, tx_hash: txHash });
-    check('Base topup: ¼ö½ÅÀÚ ºÒÀÏÄ¡ ¡æ 400', res.status === 400);
+    check('Base topup: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Ä¡ ï¿½ï¿½ 400', res.status === 400);
   } finally { restore(); }
 }
 
-// ¦¡¦¡¦¡ 16. handleBaseTopup: receipt ½ÇÆĞ status ¡æ 400 ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 16. handleBaseTopup: receipt ï¿½ï¿½ï¿½ï¿½ status ï¿½ï¿½ 400 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const wallet = (await eip191Sign(now)).address;
   const txHash = '0x' + '44'.repeat(32);
@@ -332,11 +332,11 @@ const now = Math.floor(Date.now() / 1000);
   const restore = mockFetch(async (body) => body.method === 'eth_getTransactionReceipt' ? receipt : null);
   try {
     const res = await handleBaseTopup(makeEnv(), { wallet, tx_hash: txHash });
-    check('Base topup: status=0x0 ¡æ 400', res.status === 400);
+    check('Base topup: status=0x0 ï¿½ï¿½ 400', res.status === 400);
   } finally { restore(); }
 }
 
-// ¦¡¦¡¦¡ 17. handleTopup: Solana È¸±Í (chain ¹ÌÁöÁ¤ + base58 ¡æ solana) ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 17. handleTopup: Solana È¸ï¿½ï¿½ (chain ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ + base58 ï¿½ï¿½ solana) ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const solWallet = '7xKXq8BvhJoMd5R1mJVXLLQGTzxx8fKtU8ZCBiRHPkky';
   const txHash = '5y7FTEzY1VtQ7F9jY9XgWvQTPYtRjVwSL1dbqxsA7YvA';
@@ -356,37 +356,166 @@ const now = Math.floor(Date.now() / 1000);
       body: JSON.stringify({ wallet: solWallet, tx_hash: txHash }),
     }), env);
     const data = await res.json();
-    check('Solana topup: chain ¹ÌÁöÁ¤+base58 ¡æ solana', data.chain === 'solana');
-    check('Solana topup: 200 + Å©·¹µ÷(25*600=15000)', res.status === 200 && data.added_credits === 15000);
+    check('Solana topup: chain ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½+base58 ï¿½ï¿½ solana', data.chain === 'solana');
+    check('Solana topup: 200 + Å©ï¿½ï¿½ï¿½ï¿½(25*600=15000)', res.status === 200 && data.added_credits === 15000);
   } finally { restore(); }
 }
 
-// ¦¡¦¡¦¡ 18. handleTopup: Ã¼ÀÎ ¸ğ¼ø (chain solana + 0x wallet) ¡æ 400 ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 18. handleTopup: Ã¼ï¿½ï¿½ ï¿½ï¿½ï¿½ (chain solana + 0x wallet) ï¿½ï¿½ 400 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const res = await handleTopup(new Request('http://localhost/v1/topup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chain: 'solana', wallet: BASE_SERVICE_WALLET, tx_hash: '0x' + 'ab'.repeat(31) + 'cd' }),
   }), makeEnv());
-  check('handleTopup: solana+0x Áö°© ¡æ 400', res.status === 400);
+  check('handleTopup: solana+0x ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ 400', res.status === 400);
 }
 
-// ¦¡¦¡¦¡ 19. x402PaymentRequiredResponse: networks + service_wallet ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 19. x402PaymentRequiredResponse: networks + service_wallet ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 {
   const env = makeEnv();
   const res = x402PaymentRequiredResponse(env);
   const data = await res.json();
-  check('402: ÃÖ»óÀ§ service_wallet À¯Áö', data.service_wallet === SERVICE_WALLET);
-  check('402: ÃÖ»óÀ§ network=solana À¯Áö', data.network === 'solana');
-  check('402: networks ¹è¿­ Á¸Àç', Array.isArray(data.networks) && data.networks.length >= 2);
+  check('402: ï¿½Ö»ï¿½ï¿½ï¿½ service_wallet ï¿½ï¿½ï¿½ï¿½', data.service_wallet === SERVICE_WALLET);
+  check('402: ï¿½Ö»ï¿½ï¿½ï¿½ network=solana ï¿½ï¿½ï¿½ï¿½', data.network === 'solana');
+  check('402: networks ï¿½è¿­ ï¿½ï¿½ï¿½ï¿½', Array.isArray(data.networks) && data.networks.length >= 2);
   const base = data.networks.find(n => n.network === 'base');
-  check('402: networks¿¡ base Æ÷ÇÔ', !!base && base.service_wallet === BASE_SERVICE_WALLET);
-  check('402: networks¿¡ solana Æ÷ÇÔ', data.networks.some(n => n.network === 'solana'));
+  check('402: networksï¿½ï¿½ base ï¿½ï¿½ï¿½ï¿½', !!base && base.service_wallet === BASE_SERVICE_WALLET);
+  check('402: networksï¿½ï¿½ solana ï¿½ï¿½ï¿½ï¿½', data.networks.some(n => n.network === 'solana'));
   const prHeader = res.headers.get('PAYMENT-REQUIRED');
-  check('402: PAYMENT-REQUIRED Çì´õ¿¡ networks Æ÷ÇÔ', !!prHeader && JSON.parse(prHeader).networks.length >= 2);
+  check('402: PAYMENT-REQUIRED ï¿½ï¿½ï¿½ï¿½ï¿½ networks ï¿½ï¿½ï¿½ï¿½', !!prHeader && JSON.parse(prHeader).networks.length >= 2);
 }
 
-// ¦¡¦¡¦¡ 20. ÃÖÁ¾ °á°ú Áı°è ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ============ TASKS 2.6: AI Agent ì‘ë‹µ í¬ë§· Â· max_tokens Â· LLM ì—ëŸ¬ ============
+// mock fetch(HTML) + mock Cache APIë§Œ ì‚¬ìš©. ì‹¤ë„¤íŠ¸ì›Œí¬ ì—†ìŒ, npm testì— í¬í•¨.
+{
+  const cacheMap = new Map();
+  const origCaches = globalThis.caches;
+  const origFetch = globalThis.fetch;
+  const htmlBase =
+    '<html><head><title>Fixture</title></head><body><h1>Fixture Title</h1>' +
+    Array.from({ length: 60 }, (_, i) => `<p>Paragraph ${i} lorem ipsum dolor sit amet consectetur.</p>`).join('') +
+    '</body></html>';
+  const PRO_KEY = 'aznp_pro_test00000000000000';
+  const proEnv26 = makeEnv({ apiKeys: { [PRO_KEY]: JSON.stringify({ userId: 'u1', plan: 'pro', status: 'active' }) } });
+
+  async function runPipe(query, { env = makeEnv(), apiKey = '', html = htmlBase } = {}) {
+    globalThis.caches = {
+      default: {
+        match: async (k) => cacheMap.get(typeof k === 'string' ? k : k.url) || null,
+        put: async (k, res) => {
+          try {
+            cacheMap.set(typeof k === 'string' ? k : k.url, { status: res.status, body: await res.clone().text(), contentType: res.headers.get('Content-Type') });
+          } catch { /* ignore */ }
+        },
+      },
+    };
+    globalThis.fetch = async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'text/html; charset=utf-8' }),
+      text: async () => html,
+      json: async () => ({}),
+    });
+    const qs = new URLSearchParams(query);
+    const headers = apiKey ? { 'X-API-Key': apiKey } : {};
+    try {
+      return await worker.fetch(new Request(`http://localhost/?${qs}`, { headers }), env, { waitUntil() {} });
+    } finally {
+      globalThis.fetch = origFetch;
+      globalThis.caches = origCaches;
+      cacheMap.clear();
+    }
+  }
+
+  // 1) ê¸°ë³¸ GET â†’ text/markdown
+  {
+    const res = await runPipe({ url: 'https://example.com/post' });
+    const body = await res.text();
+    check('2.6 GET: 200 + text/markdown', res.status === 200 && (res.headers.get('content-type') || '').includes('text/markdown'));
+    check('2.6 GET: markdown ë³¸ë¬¸ (H1 í¬í•¨)', body.includes('# Fixture Title'));
+  }
+
+  // 2) format=toml (Pro)
+  {
+    const res = await runPipe({ url: 'https://example.com/post', format: 'toml' }, { env: proä¼šè¯_KEY() });
+    const body = await res.text();
+    check('2.6 toml: 200 + application/toml', res.status === 200 && (res.headers.get('content-type') || '').includes('application/toml'));
+    check('2.6 toml: title/content', body.includes('title = "Fixture Title"') && body.includes('content = """'));
+  }
+
+  // 3) format=yaml (Pro)
+  {
+    const res = await runPipe({ url: 'https://example.com/post', format: 'yaml' }, { env: proEnvWith(), apiKey: PRO_KEY });
+    const body = await res.text();
+    check('2.6 yaml: title/content block', body.includes('title: "Fixture Title"') && body.includes('content: |'));
+  }
+
+  // 4) format=json-ld (Pro)
+  {
+    const res = await runPipe({ url: 'https://example.com/post', format: 'json-ld' }, { env: proEnvWith(), apiKey: PRO_KEY });
+    const data = JSON.parse(await res.text());
+    check('2.6 json-ld: @type Article', data['@type'] === 'Article' && data['@context'] === 'https://schema.org');
+  }
+
+  // 5) format=json (Pro, ê¸°ì¡´ í•˜ìœ„ í˜¸í™˜)
+  {
+    const res = await runPipe({ url: 'https://example.com/post', format: 'json' }, { env: proEnvWith(), apiKey: PRO_KEY });
+    const data = await res.json();
+    check('2.6 json: title/source/content', !!data.title && !!data.source && !!data.content);
+    check('2.6 json: meta.plan pro', data.meta && data.meta.plan === 'pro');
+  }
+
+  // 6) format=xml â†’ 400 unsupported_format (ê¸°ë³¸ TOML ì—ëŸ¬)
+  {
+    const res = await runPipe({ url: 'https://example.com/post', format: 'xml' });
+    const body = await res.text();
+    check('2.6 unsupported: 400 + code', res.status === 400 && body.includes('unsupported_format') && body.includes('action_recommendation'));
+    check('2.6 unsupported: ê¸°ë³¸ TOML(JSON ì•„ë‹˜)', !body.trim().startsWith('{'));
+  }
+
+  // 7) Free + format=toml â†’ 402 (JSON + PAYMENT-REQUIRED ìœ ì§€)
+  {
+    const res = await runPipe({ url: 'https://example.com/post', format: 'toml' });
+    const body = await res.text();
+    check('2.6 free+toml: 402 JSON + PAYMENT-REQUIRED', res.status === 402 && body.trim().startsWith('{') && !!res.headers.get('PAYMENT-REQUIRED'));
+  }
+
+  // 8) ì—†ëŠ” ê²½ë¡œ â†’ 404 TOML [error]
+  {
+    const res = await runPipe({});
+    const body = await res.text();
+    check('2.6 404: TOML [error] + action_recommendation', res.status === 404 && body.includes('[error]') && body.includes('action_recommendation') && !body.trim().startsWith('{'));
+  }
+
+  // 9) ì—†ëŠ” ê²½ë¡œ + format=json â†’ JSON ì—ëŸ¬
+  {
+    const res = await runPipe({ format: 'json' });
+    const body = await res.text();
+    let j = null; try { j = JSON.parse(body); } catch { /* */ }
+    check('2.6 404+format=json: JSON error.code', res.status === 404 && j && j.error && j.error.code);
+  }
+
+  // 10) max_tokens (Pro): ê¸´ í”½ìŠ¤ì²˜ì—ì„œ est<=2000, H1 ìœ ì§€, truncate marker
+  {
+    const res = await runPipe({ url: 'https://example.com/long', max_tokens: '200' }, { env: proEnvWith(), apiKey: PRO_KEY });
+    const body = await res.text();
+    const est = Math.ceil(body.length / 4);
+    check('2.6 max_tokens: est <= 2000', est <= 2000, 'est=' + est);
+    check('2.6 max_tokens: H1 ìœ ì§€', body.startsWith('# Fixture Title'));
+    check('2.6 max_tokens: truncate marker or H1 intact', body.includes('truncated by max_tokens') || est < 500);
+  }
+
+  // 11) max_tokens 500 vs 2000 â†’ ìºì‹œ í‚¤ ë¶„ë¦¬ë¡œ ì„œë¡œ ë‹¤ë¥¸ ë³¸ë¬¸
+  {
+    const r1 = await runPipe({ url: 'https://example.com/dist', max_tokens: '500' }, { env: proEnvWith(), apiKey: PRO_KEY });
+    const b1 = (await r1.text()).length;
+    const r2 = await runPipe({ url: 'https://example.com/dist', max_tokens: '2000' }, { env: proEnvWith(), apiKey: PRO_KEY });
+    const b2 = (await r2.text()).length;
+    check('2.6 max_tokens: 500 vs 2000 ì„œë¡œ ë‹¤ë¥¸ ë³¸ë¬¸', b1 !== b2, 'b1=' + b1 + ' b2=' + b2);
+  }
+}
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 20. ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 const failed = results.filter(r => !r.ok);
 console.log(`\n===== ${results.length - failed.length}/${results.length} passed =====`);
 if (failed.length) {

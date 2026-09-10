@@ -15,6 +15,8 @@
 import { convertToCleanMarkdown, estimateTokens, estimateOriginalTokens } from './htmlToMarkdown.js';
 import { compressOpenApiSpec } from './openapiCompressor.js';
 import { checkRateLimit } from './rateLimit.js';
+import { serializeResponse, ALLOWED_FORMATS, escapeTomlString, escapeYamlString } from './formatters.js';
+import { truncateMarkdown } from './truncate.js';
 import {
   verifySolanaSignature,
   verifyEip191Signature,
@@ -110,20 +112,27 @@ export default {
 
     // GET 이외 메서드 차단
     if (request.method !== 'GET') {
-      return jsonResponse({ error: 'Method not allowed. Use GET.' }, 405);
+      return errorResponse(request, {
+        status: 405,
+        code: 'method_not_allowed',
+        message: 'Method not allowed. Use GET.',
+        action_recommendation: 'Retry with GET /?url=https://example.com',
+      });
     }
 
-    // 헬스체크 엔드포인트
+    // 헬스체크 엔드포인트 (JSON 유지 — TASKS 2.3)
     if (url.pathname === '/health') {
       return jsonResponse({ status: 'ok', version: '2.1', auth: 'solana-ed25519+base-eip191' }, 200);
     }
 
-    // 루트 경로: 간단한 안내
+    // 루트 경로: 간단한 안내 (LLM-readable 에러 — TASKS 2.3)
     if (url.pathname !== '/' && url.pathname !== '') {
-      return jsonResponse(
-        { error: 'Not found. Use GET /?url=<target_url> or POST /v1/topup', docs: UPGRADE_URL },
-        404
-      );
+      return errorResponse(request, {
+        status: 404,
+        code: 'not_found',
+        message: 'Unknown path. Use GET /?url=<target_url> or POST /v1/topup',
+        action_recommendation: 'Retry with GET /?url=https://example.com or read docs',
+      });
     }
 
     // ─── 파라미터 파싱 ─────────────────────────────────────────────────────────
@@ -137,14 +146,12 @@ export default {
 
     // ─── 1. URL 유효성 검증 ────────────────────────────────────────────────────
     if (!targetUrl) {
-      return jsonResponse(
-        {
-          error: "Missing 'url' query parameter",
-          usage: 'GET /?url=https://example.com/article',
-          docs: UPGRADE_URL,
-        },
-        400
-      );
+      return errorResponse(request, {
+        status: 400,
+        code: 'missing_url',
+        message: "Missing 'url' query parameter",
+        action_recommendation: 'Add ?url=https://example.com to the request',
+      });
     }
 
     let parsedTargetUrl;
@@ -155,12 +162,22 @@ export default {
         throw new Error('Only http and https URLs are allowed');
       }
     } catch (e) {
-      return jsonResponse({ error: `Invalid URL: ${e.message}` }, 400);
+      return errorResponse(request, {
+        status: 400,
+        code: 'invalid_url',
+        message: `Invalid URL: ${e.message}`,
+        action_recommendation: 'Provide a valid absolute http(s) URL',
+      });
     }
 
     // SSRF 방지: 사설 IP 차단
     if (isPrivateHost(parsedTargetUrl.hostname)) {
-      return jsonResponse({ error: 'Private/local URLs are not allowed' }, 403);
+      return errorResponse(request, {
+        status: 403,
+        code: 'private_url',
+        message: 'Private/local URLs are not allowed',
+        action_recommendation: 'Use a public http(s) URL',
+      });
     }
 
     // ─── 2. 플랜 확인 (KV) ────────────────────────────────────────────────────
@@ -169,11 +186,27 @@ export default {
 
     // x-chain 헤더와 지갑 주소 형식 모순 → 400 (TASKS 1.2)
     if (planInfo.plan === 'chain_mismatch') {
-      return jsonResponse({ error: planInfo.error }, 400);
+      return errorResponse(request, {
+        status: 400,
+        code: 'chain_mismatch',
+        message: planInfo.error || 'x-chain header does not match wallet address format',
+        action_recommendation: 'Correct the x-chain value to match the wallet address, or omit x-chain',
+      });
+    }
+
+    // ─── 2-b. format 검증 (TASKS 2.1) ──────────────────────────────────────
+    if (!ALLOWED_FORMATS.includes(format)) {
+      return errorResponse(request, {
+        status: 400,
+        code: 'unsupported_format',
+        message: `Unsupported format "${format}". Allowed: ${ALLOWED_FORMATS.join(', ')}`,
+        action_recommendation: `Use one of: ${ALLOWED_FORMATS.join(', ')}`,
+      });
     }
 
     // ─── 3. 기능 권한 및 x402 결제 체크 ────────────────────────────────────
-    const requiresPro = forceRender || mode === 'summary' || format === 'json' || maxTokens > 0;
+    const structured = ['json', 'toml', 'yaml', 'json-ld'].includes(format);
+    const requiresPro = forceRender || mode === 'summary' || structured || maxTokens > 0;
     if (requiresPro && planInfo.plan === 'free') {
       return x402PaymentRequiredResponse(env, 'This feature requires payment via x402 or a Pro API Key.');
     }
@@ -185,25 +218,17 @@ export default {
         ? `${limits.rpd} requests per day`
         : `${limits.rpm} requests per minute`;
 
-      return new Response(
-        JSON.stringify({
-          error: 'Rate limit exceeded',
-          plan: planInfo.plan,
-          limit: limitType,
-          reset_in_seconds: rateLimitResult.resetIn,
-          upgrade: UPGRADE_URL,
-        }),
-        {
-          status: 429,
-          headers: {
-            ...CORS_HEADERS,
-            'Content-Type': 'application/json',
-            'Retry-After': String(rateLimitResult.resetIn),
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': String(Math.ceil(Date.now() / 1000) + rateLimitResult.resetIn),
-          },
-        }
-      );
+      const res = errorResponse(request, {
+        status: 429,
+        code: 'rate_limited',
+        message: `Rate limit exceeded: ${limitType}`,
+        action_recommendation: `Wait ${rateLimitResult.resetIn} seconds (see Retry-After) and retry`,
+      });
+      const h = new Headers(res.headers);
+      h.set('Retry-After', String(rateLimitResult.resetIn));
+      h.set('X-RateLimit-Remaining', '0');
+      h.set('X-RateLimit-Reset', String(Math.ceil(Date.now() / 1000) + rateLimitResult.resetIn));
+      return new Response(res.body, { status: 429, headers: h });
     }
 
     // ─── 4-b. OpenAPI / Swagger URL 감지 및 처리 ─────────────────────────────────
@@ -262,12 +287,14 @@ export default {
     }
 
     // ─── 5. 캐시 키 생성 ──────────────────────────────────────────────────────
-    // 캐시에 영향을 주는 파라미터만 포함
+    // 캐시에 영향을 주는 파라미터만 포함 (TASKS 2.4)
+    // L1(Cache API)은 직렬화된 응답을 저장하므로 format 포함 + max_tokens 포함
     const canonicalParams = new URLSearchParams();
     canonicalParams.set('url', targetUrl);
     if (mode !== 'auto') canonicalParams.set('mode', mode);
     if (format !== 'markdown') canonicalParams.set('format', format);
     if (!includeImages) canonicalParams.set('images', '0');
+    if (maxTokens > 0) canonicalParams.set('max_tokens', maxTokens);
     // 플랜별 캐시 분리
     canonicalParams.set('plan', planInfo.plan);
 
@@ -290,9 +317,11 @@ export default {
     }
 
     // ─── 7. L2: KV 조회 ──────────────────────────────────────────────────────
+    // KV에는 truncate 후의 마크다운을 저장하고, 히트 시 요청 format으로 직렬화한다.
+    // 따라서 키에 format은 제외하고 max_tokens는 포함한다 (TASKS 2.4 — ARCHITECTURE 명시).
     const urlHash = await hashUrl(targetUrl);
     const imagesFlag = includeImages ? '1' : '0';
-    const kvKey = `md:${urlHash}:${mode}:${format}:img${imagesFlag}:${planInfo.plan}`;
+    const kvKey = `md:${urlHash}:${mode}:img${imagesFlag}:${planInfo.plan}:mt${maxTokens}`;
 
     if (!forceFresh && env.RESULTS_KV) {
       try {
@@ -407,10 +436,12 @@ export default {
           });
 
           if (!htmlRes.ok) {
-            return jsonResponse(
-              { error: `Failed to fetch target URL: HTTP ${htmlRes.status}` },
-              502
-            );
+            return errorResponse(request, {
+              status: 502,
+              code: 'fetch_failed',
+              message: `Failed to fetch target URL: HTTP ${htmlRes.status}`,
+              action_recommendation: 'Verify the URL is reachable and public, then retry',
+            });
           }
 
           const ct = htmlRes.headers.get('content-type') || '';
@@ -440,12 +471,10 @@ export default {
         markdown = `# Summary\n\n${markdown.slice(0, 1500)}...\n\n*(Summary mode — upgrade to Pro for full AI summarization)*`;
       }
 
-      // max_tokens (Pro)
-      if (maxTokens > 0 && limits.allowSummary) {
-        const approxChars = maxTokens * 4;
-        if (markdown.length > approxChars) {
-          markdown = markdown.slice(0, approxChars) + '\n\n...(truncated by max_tokens)';
-        }
+      // max_tokens (Pro) — 마크다운 블록 스코어링 기반 압축 (TASKS 2.2)
+      // requiresPro로 max_tokens>0은 Pro만 통과하므로 여기선 조건만으로 충분
+      if (maxTokens > 0) {
+        markdown = truncateMarkdown(markdown, maxTokens);
       }
 
       // ─── 10. 토큰 추정 ────────────────────────────────────────────────────────
@@ -499,7 +528,12 @@ export default {
       return response;
     } catch (err) {
       console.error('[AZNP] Error:', err);
-      return jsonResponse({ error: err.message || 'Internal server error' }, 500);
+      return errorResponse(request, {
+        status: 500,
+        code: 'internal_error',
+        message: err.message || 'Internal server error',
+        action_recommendation: 'Retry with a limited number of attempts; stop if it keeps failing',
+      });
     }
   },
 };
@@ -1047,7 +1081,7 @@ function x402PaymentRequiredResponse(env, message = 'Payment Required') {
 }
 
 /**
- * 응답 생성
+ * 응답 생성 (TASKS 2.1 — format 직렬화는 formatters.js 후처리)
  */
 function buildResponse(markdown, opts) {
   const {
@@ -1072,8 +1106,6 @@ function buildResponse(markdown, opts) {
 
   const headers = {
     ...CORS_HEADERS,
-    'Content-Type':
-      format === 'json' ? 'application/json; charset=utf-8' : 'text/markdown; charset=utf-8',
     'X-AZNP-Plan': plan,
     'X-AZNP-Source': source,
     'X-AZNP-Cache': cacheStatus,
@@ -1086,27 +1118,22 @@ function buildResponse(markdown, opts) {
   if (reductionPct) headers['X-Token-Reduction'] = reductionPct;
   if (rateLimitReset) headers['X-RateLimit-Reset'] = String(rateLimitReset);
 
-  let body = markdown;
-  if (format === 'json') {
-    body = JSON.stringify({
-      title: extractTitle(markdown),
-      source: targetUrl,
-      content: markdown,
-      meta: {
-        plan,
-        extraction: source,
-        tokens: tokenEstimate,
-        original_tokens: originalTokenEstimate,
-        token_reduction: reductionPct,
-      },
-    });
-  }
+  // 포맷 직렬화 (markdown은 그대로, 구조화 포맷은 후처리)
+  const serialized = serializeResponse(markdown, {
+    format,
+    plan,
+    source,
+    targetUrl,
+    tokenEstimate,
+    originalTokenEstimate,
+  });
+  headers['Content-Type'] = serialized.contentType;
 
-  return new Response(body, { headers });
+  return new Response(serialized.body, { headers });
 }
 
 /**
- * JSON 응답 헬퍼
+ * JSON 응답 헬퍼 (402 · topup · /health 등 — TASKS 2.3 유지 대상)
  */
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -1119,11 +1146,67 @@ function jsonResponse(data, status = 200) {
 }
 
 /**
- * Markdown 제목 추출
+ * LLM-readable 에러 응답 (TASKS 2.3)
+ * - 기본: TOML `[error]` 테이블
+ * - format=json 또는 Accept: application/json → JSON
+ * - format=yaml → YAML
+ * - format=markdown/toml/미지정 → TOML
  */
-function extractTitle(markdown) {
-  const match = markdown.match(/^#\s+(.+)$/m);
-  return match ? match[1].trim() : 'Untitled';
+function errorResponse(request, { status, code, message, action_recommendation, extra }) {
+  let format = 'toml';
+  try {
+    const url = new URL(request.url);
+    const q = url.searchParams.get('format');
+    if (q === 'json' || q === 'json-ld') format = 'json';
+    else if (q === 'yaml') format = 'yaml';
+    else if (q === 'markdown' || q === 'toml' || !q) format = 'toml';
+  } catch {
+    format = 'toml';
+  }
+
+  if (format === 'json' && request.headers.get('Accept')?.includes('application/json')) {
+    // Accept로도 JSON 명시
+  } else if (format !== 'json' && request.headers.get('Accept')?.includes('application/json')) {
+    format = 'json';
+  }
+
+  const payload = {
+    status,
+    code,
+    message,
+    action_recommendation,
+  };
+  if (extra) Object.assign(payload, extra);
+
+  let body;
+  let contentType;
+  if (format === 'json') {
+    body = JSON.stringify({ error: payload }, null, 2);
+    contentType = 'application/json; charset=utf-8';
+  } else if (format === 'yaml') {
+    body =
+      'status: ' + Number(status) + '\n' +
+      'code: ' + escapeYamlString(code) + '\n' +
+      'message: ' + escapeYamlString(message) + '\n' +
+      'action_recommendation: ' + escapeYamlString(action_recommendation) + '\n';
+    contentType = 'application/yaml; charset=utf-8';
+  } else {
+    body =
+      '[error]\n' +
+      `status = ${Number(status)}\n` +
+      `code = ${escapeTomlString(code)}\n` +
+      `message = ${escapeTomlString(message)}\n` +
+      `action_recommendation = ${escapeTomlString(action_recommendation)}\n`;
+    contentType = 'application/toml; charset=utf-8';
+  }
+
+  return new Response(body, {
+    status,
+    headers: {
+      ...CORS_HEADERS,
+      'Content-Type': contentType,
+    },
+  });
 }
 
 /**

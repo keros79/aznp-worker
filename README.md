@@ -68,7 +68,7 @@ curl -X GET "https://aznp-proxy.kerberos79.workers.dev/?url=https://news.ycombin
 | `url` | 필수 | 대상 웹페이지 URL |
 | `render` | `false` | `true` → JS 렌더링 강제 (Tier 3 Browser Rendering) |
 | `mode` | `auto` | `auto` / `summary` (요약 모드) |
-| `format` | `markdown` | `markdown` / `json` (구조화된 JSON 반환) |
+| `format` | `markdown` | `markdown` (기본) / `json` / `toml` / `yaml` / `json-ld` (구조화는 Pro) |
 | `max_tokens` | `0` | 최대 토큰 제한 |
 | `images` | `1` | `0` → 이미지 제외 |
 

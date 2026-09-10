@@ -1,0 +1,31 @@
+389: // ============ TASKS 2.6: AI Agent ?? ?? ? max_tokens ? LLM ?? ============
+402:   async function runPipe(query, { env = makeEnv(), apiKey = '', html = htmlBase } = {}) {
+433:     const res = await runPipe({ url: 'https://example.com/post' });
+435:     check('2.6 GET: 200 + text/markdown', res.status === 200 && (res.headers.get('content-type') || '').includes('text/markdown'));
+436:     check('2.6 GET: markdown ?? (H1 ??)', body.includes('# Fixture Title'));
+441:     const res = await runPipe({ url: 'https://example.com/post', format: 'toml' }, { env: pro??_KEY() });
+443:     check('2.6 toml: 200 + application/toml', res.status === 200 && (res.headers.get('content-type') || '').includes('application/toml'));
+444:     check('2.6 toml: title/content', body.includes('title = "Fixture Title"') && body.includes('content = """'));
+449:     const res = await runPipe({ url: 'https://example.com/post', format: 'yaml' }, { env: proEnvWith(), apiKey: PRO_KEY });
+451:     check('2.6 yaml: title/content block', body.includes('title: "Fixture Title"') && body.includes('content: |'));
+456:     const res = await runPipe({ url: 'https://example.com/post', format: 'json-ld' }, { env: proEnvWith(), apiKey: PRO_KEY });
+458:     check('2.6 json-ld: @type Article', data['@type'] === 'Article' && data['@context'] === 'https://schema.org');
+463:     const res = await runPipe({ url: 'https://example.com/post', format: 'json' }, { env: proEnvWith(), apiKey: PRO_KEY });
+465:     check('2.6 json: title/source/content', !!data.title && !!data.source && !!data.content);
+466:     check('2.6 json: meta.plan pro', data.meta && data.meta.plan === 'pro');
+471:     const res = await runPipe({ url: 'https://example.com/post', format: 'xml' });
+473:     check('2.6 unsupported: 400 + code', res.status === 400 && body.includes('unsupported_format') && body.includes('action_recommendation'));
+474:     check('2.6 unsupported: ?? TOML(JSON ??)', !body.trim().startsWith('{'));
+479:     const res = await runPipe({ url: 'https://example.com/post', format: 'toml' });
+481:     check('2.6 free+toml: 402 JSON + PAYMENT-REQUIRED', res.status === 402 && body.trim().startsWith('{') && !!res.headers.get('PAYMENT-REQUIRED'));
+486:     const res = await runPipe({});
+488:     check('2.6 404: TOML [error] + action_recommendation', res.status === 404 && body.includes('[error]') && body.includes('action_recommendation') && !body.trim().startsWith('{'));
+493:     const res = await runPipe({ format: 'json' });
+496:     check('2.6 404+format=json: JSON error.code', res.status === 404 && j && j.error && j.error.code);
+501:     const res = await runPipe({ url: 'https://example.com/long', max_tokens: '200' }, { env: proEnvWith(), apiKey: PRO_KEY });
+504:     check('2.6 max_tokens: est <= 2000', est <= 2000, 'est=' + est);
+505:     check('2.6 max_tokens: H1 ??', body.startsWith('# Fixture Title'));
+506:     check('2.6 max_tokens: truncate marker or H1 intact', body.includes('truncated by max_tokens') || est < 500);
+511:     const r1 = await runPipe({ url: 'https://example.com/dist', max_tokens: '500' }, { env: proEnvWith(), apiKey: PRO_KEY });
+513:     const r2 = await runPipe({ url: 'https://example.com/dist', max_tokens: '2000' }, { env: proEnvWith(), apiKey: PRO_KEY });
+515:     check('2.6 max_tokens: 500 vs 2000 ?? ?? ??', b1 !== b2, 'b1=' + b1 + ' b2=' + b2);

@@ -1,0 +1,3 @@
+
+removed 12 packages in 2s
+EXITCODE=0 

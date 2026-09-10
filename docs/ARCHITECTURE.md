@@ -28,7 +28,7 @@ AZNP(AZNP)는 Cloudflare Workers 단일 워커(`src/worker.js`) 기반의 Markdo
    ▼
 [6] Tier 변환     Tier1(CF Native) → Tier2(자체 변환) → Tier3(Browser Rendering, Pro 전용)
    ▼
-[7] 응답          markdown/json + X-AZNP-* 메타 헤더 (추정 토큰·절감률)
+[7] 응답          markdown/json/toml/yaml/json-ld 직렬화(`src/formatters.js`) + truncate 후처리 + X-AZNP-* 메타 헤더
 ```
 
 ## 3. 인증 레이어 (결제/인증과 변환 분리)

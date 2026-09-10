@@ -1,0 +1,20 @@
+﻿
+## 10. 濡쒕뱶留?
+
+| ?④퀎 | ?댁슜 | ?곗꽑?쒖쐞 |
+|------|------|----------|
+| v2.1 | ?ㅼ링 罹먯떆 + CPU/?좏겙 理쒖쟻??| ??|
+| v2.1.1 | **Multi-Chain ?⑥껜??寃곗젣 (?꾩옱)** ??Solana Ed25519 + Base EIP-191/EIP-712 吏媛??몄쬆, Solana/Base native USDC 異⑹쟾, 402 硫?곗껜???묐떟 | ??|
+| v2.2 | ?ㅼ젣 Rate Limit (KV sliding window, `src/rateLimit.js`) | ??|
+| v2.3 | Browser Rendering ?꾩쟾 ?곕룞 | ?믪쓬 |
+| v2.4 | Workers AI ?붿빟 + 罹먯떆 | 以묎컙 |
+| v2.5 | ?꾨찓?몃퀎 ?꾨━??洹쒖튃 (KV) | 以묎컙 |
+| v2.6 | Pages ??쒕낫??(?ъ슜???덇컧 由ы룷?? | 以묎컙 |
+| v3.0 | Team ?뚮옖 + 醫뚯꽍 愿由?| ??쓬 |
+
+---
+
+## 11. 李멸퀬 ?먮즺
+
+- [Cloudflare Markdown for Agents](https://blog.cloudflare.com/markdown-for-agents/)
+- [Cloudflare Browser Rendering ??/markdown](https://developers.cloudflare.com/browser-rendering/quick-actions/markdown-endpoint/)

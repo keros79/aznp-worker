@@ -205,7 +205,7 @@ GET https://aznp.yourdomain.workers.dev/?url=https://example.com/article
 | `mode` | ❌ | `auto` (기본) / `summary` | summary는 Pro |
 | `max_tokens` | ❌ | 반환 Markdown 최대 토큰 수 | Pro |
 | `render` | ❌ | `true` → JS 렌더링 강제 | Pro |
-| `format` | ❌ | `markdown` (기본) / `json` | json은 Pro |
+| `format` | ❌ | `markdown` (기본) / `json` / `toml` / `yaml` / `json-ld` | `json`·`toml`·`yaml`·`json-ld`는 Pro |
 | `fresh` | ❌ | `1` → 캐시 무시하고 강제 갱신 | Free/Pro |
 | `images` | ❌ | `0` → 이미지 관련 텍스트 최소화 | Free/Pro |
 
@@ -216,6 +216,10 @@ GET https://aznp.yourdomain.workers.dev/?url=https://example.com/article
 | `X-API-Key` | Pro 플랜 인증 키 (`aznp_pro_xxxxx`) |
 
 ### 5.4 응답 헤더 (예시)
+
+> 기존 `X-AZNP-*` / `X-Markdown-Tokens` / `X-Original-Tokens` / `X-Token-Reduction` 헤더는 유지한다 (v2.2에서 추가 신규 헤더 없음).
+> `Content-Type`은 포맷에 따라 달라진다: markdown=`text/markdown`, toml=`application/toml`, yaml=`application/yaml`,
+> json-ld=`application/ld+json`, json=`application/json`.
 
 ```
 Content-Type: text/markdown; charset=utf-8
@@ -228,15 +232,21 @@ X-RateLimit-Remaining: 87
 Cache-Control: public, max-age=21600, stale-while-revalidate=86400
 ```
 
-### 5.5 에러 응답
+### 5.5 에러 응답 (LLM-readable, 기본 TOML)
 
-```json
-{
-  "error": "Rate limit exceeded",
-  "plan": "free",
-  "limit": "15 requests per minute"
-}
+변환 API(`GET /`, `/health` 제외)의 4xx/5xx 에러는 기본적으로 **TOML `[error]`** 테이블을 반환합니다.
+`format=json`(또는 Accept: application/json)이면 JSON, `format=yaml`이면 YAML로 응답합니다.
+`POST /v1/topup`·402(PAYMENT-REQUIRED)·`GET /health`는 기존대로 JSON을 유지합니다.
+
+```toml
+[error]
+status = 429
+code = "rate_limited"
+message = "Rate limit exceeded: 15 requests per minute"
+action_recommendation = "Wait 30 seconds (see Retry-After) and retry"
 ```
+
+고정 필드: `status`(HTTP) · `code`(snake_case) · `message` · `action_recommendation`
 
 ---
 
